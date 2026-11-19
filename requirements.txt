@@ -1,0 +1,19 @@
+# 视频/音频 -> 字幕 自动生成 + 多语种翻译
+# 核心 ASR：faster-whisper（CTranslate2 后端，比原版 Whisper 快 4~8 倍）
+faster-whisper>=1.1.0
+huggingface-hub>=0.23.0
+# 翻译分词器（离线翻译模型基于 sentencepiece，约 1 MB）
+# 翻译推理直接复用上面的 ctranslate2，不额外引入 torch
+sentencepiece>=0.2.0
+# 繁体转简体（中文识别结果后处理）。零依赖，仅约 100 KB
+zhconv>=1.4.0
+# GPU 运行库（CUDA 12 版，Win 下免装 CUDA Toolkit 即可用 GPU）
+nvidia-cublas-cu12
+nvidia-cudnn-cu12
+nvidia-cuda-runtime-cu12
+# 图形界面（可选）。用系统 WebView2 渲染，不打包浏览器内核，仅约 1 MB。
+# 不需要界面的话可以不装，命令行 subgen.bat 照常使用。
+pywebview>=6.0
+
+# 图像分析（硬字幕位置检测、波形/帧处理）。约 3 MB
+pillow>=10.0.0

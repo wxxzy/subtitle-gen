@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>字幕校对工作台</title>
+<style>
+:root{
+  --bg:#eef1f6; --card:#fff; --ink:#151a21; --ink2:#525b68; --ink3:#8b939f;
+  --line:#e4e8ee; --line2:#eef1f5;
+  --brand:#3b6ef5; --brand-d:#2c58d6; --brand-soft:#eef3ff;
+  --ok:#12a150; --ok-soft:#e9f8ef;
+  --warn:#e08b0a; --warn-soft:#fdf6e8;
+  --err:#e0393e; --err-soft:#fdeded;
+  --r:12px; --r-s:9px;
+  --sh:0 1px 3px rgba(20,30,60,.05), 0 6px 20px rgba(20,30,60,.06);
+  --mono:'Cascadia Mono','JetBrains Mono',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:'Microsoft YaHei UI','Segoe UI',sans-serif;
+  background:var(--bg);color:var(--ink);font-size:13px;line-height:1.55;
+  overflow:hidden;user-select:none;
+}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#c9d0da;border-radius:5px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:#adb7c4;background-clip:content-box}
+
+/* ---------------- 布局 ---------------- */
+.app{display:flex;flex-direction:column;height:100vh}
+
+.top{
+  display:flex;align-items:center;gap:10px;padding:10px 16px;
+  background:var(--card);border-bottom:1px solid var(--line);flex-shrink:0;
+}
+.logo{
+  width:30px;height:30px;border-radius:9px;flex-shrink:0;
+  background:linear-gradient(135deg,#4f7df7,#2c58d6);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;
+  box-shadow:0 2px 8px rgba(59,110,245,.28);
+}
+.brand{font-size:14.5px;font-weight:700}
+.brand small{font-weight:400;color:var(--ink3);font-size:11.5px;margin-left:7px}
+.top-mid{flex:1;min-width:0;display:flex;align-items:center;gap:8px;justify-content:center}
+.file-chip{
+  display:flex;align-items:center;gap:6px;max-width:520px;
+  background:#f4f6fa;border:1px solid var(--line);border-radius:8px;
+  padding:4px 10px;font-size:12px;color:var(--ink2);
+}
+.file-chip .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.top-right{display:flex;gap:7px;align-items:center;flex-shrink:0}
+
+button{
+  font-family:inherit;font-size:12.5px;cursor:pointer;
+  border:1px solid var(--line);background:#fff;color:var(--ink2);
+  border-radius:8px;padding:5px 12px;font-weight:500;transition:all .13s;white-space:nowrap;
+}
+button:hover{background:#f7f9fc;border-color:#d3dae4;color:var(--ink)}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.45;cursor:not-allowed;transform:none}
+button.primary{
+  background:linear-gradient(180deg,#4a78f7,#3b6ef5);color:#fff;border-color:transparent;
+  box-shadow:0 2px 8px rgba(59,110,245,.26);font-weight:600;
+}
+button.primary:hover{background:linear-gradient(180deg,#3f6ff0,#2c58d6);color:#fff}
+button.ghost{background:transparent;border-color:transparent;color:var(--ink3);padding:4px 8px}
+button.ghost:hover{background:#f1f4f9;color:var(--ink)}
+button svg{width:13px;height:13px;vertical-align:-2px;margin-right:5px}
+button.icon-only{padding:5px 7px}
+button.icon-only svg{margin:0}
+
+.main{display:flex;gap:0;flex:1;min-height:0;overflow:hidden}
+
+/* ---------------- 左侧播放器 ---------------- */
+.left{
+  flex:0 0 42%;min-width:340px;max-width:640px;
+  display:flex;flex-direction:column;border-right:1px solid var(--line);
+  background:var(--card);min-height:0;
+}
+.stage{
+  flex:1;min-height:0;background:#0e1118;display:flex;
+  align-items:center;justify-content:center;position:relative;overflow:hidden;
+}
+.stage video{max-width:100%;max-height:100%;outline:none;display:block}
+.stage audio{width:100%;padding:0 24px}
+.stage .ph{color:#5b6474;font-size:13px;text-align:center;padding:20px}
+.stage .ph svg{width:40px;height:40px;margin-bottom:10px;opacity:.5}
+
+/* 浮层字幕 */
+.suboverlay{
+  position:absolute;left:0;right:0;bottom:6%;text-align:center;
+  pointer-events:none;padding:0 6%;z-index:5;
+}
+.suboverlay span{
+  display:inline-block;background:rgba(0,0,0,.66);color:#fff;
+  padding:3px 12px;border-radius:6px;font-size:19px;line-height:1.45;
+  text-shadow:0 1px 3px rgba(0,0,0,.7);max-width:100%;
+  box-shadow:0 2px 10px rgba(0,0,0,.3);
+}
+.suboverlay span.hide{display:none}
+
+/* 控制条 */
+.ctrl{
+  padding:10px 14px 12px;border-top:1px solid var(--line);
+  background:var(--card);flex-shrink:0;
+}
+.timeline{position:relative;height:22px;margin-bottom:6px;cursor:pointer;user-select:none}
+.timeline .track{
+  position:absolute;top:9px;left:0;right:0;height:4px;background:#e3e8f0;border-radius:2px;
+}
+.timeline .played{
+  position:absolute;top:9px;left:0;height:4px;background:linear-gradient(90deg,#5b85f8,#3b6ef5);
+  border-radius:2px;width:0;
+}
+/* 字幕分段刻度 */
+.timeline .marks{position:absolute;top:0;left:0;right:0;height:22px}
+.timeline .mk{position:absolute;width:2px;height:6px;background:#b9c6da;top:8px;border-radius:1px}
+.timeline .mk.cur{background:var(--brand);height:12px;top:5px;width:3px}
+.timeline .head{
+  position:absolute;top:4px;width:14px;height:14px;border-radius:50%;
+  background:#fff;border:3px solid var(--brand);margin-left:-7px;
+  box-shadow:0 1px 5px rgba(59,110,245,.4);pointer-events:none;
+}
+.tinfo{display:flex;justify-content:space-between;font-family:var(--mono);
+  font-size:11px;color:var(--ink3);margin-bottom:8px}
+.btns{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.btns .grow{flex:1}
+.speed{
+  font-family:var(--mono);font-size:11.5px;color:var(--ink2);
+  border:1px solid var(--line);border-radius:7px;padding:3px 8px;cursor:pointer;
+  background:#fff;
+}
+.speed:hover{border-color:#ccd5e2}
+.toggle-l{
+  display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink2);cursor:pointer;
+}
+.toggle-l input{width:14px;height:14px;accent-color:var(--brand);cursor:pointer}
+
+/* ---------------- 右侧字幕编辑 ---------------- */
+.right{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--card)}
+.r-head{
+  display:flex;align-items:center;gap:9px;padding:10px 16px;border-bottom:1px solid var(--line);
+  flex-shrink:0;flex-wrap:wrap;
+}
+.r-head h3{font-size:13.5px;font-weight:700}
+.stat{font-size:11.5px;color:var(--ink3)}
+.dotd{width:5px;height:5px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:1px}
+.filter{display:inline-flex;background:#eef1f6;border-radius:8px;padding:2px;gap:2px;margin-left:auto}
+.filter button{
+  border:none;background:transparent;padding:3px 10px;border-radius:6px;
+  font-size:12px;color:var(--ink3);
+}
+.filter button.on{background:#fff;color:var(--ink);font-weight:600;box-shadow:0 1px 3px rgba(20,30,60,.08)}
+
+.r-body{flex:1;overflow:auto;min-height:0;padding:8px 12px 20px}
+
+.cue{
+  display:flex;gap:10px;padding:9px 10px;border-radius:var(--r-s);
+  border:1px solid transparent;transition:background .12s,border-color .12s;
+  cursor:pointer;position:relative;
+}
+.cue:hover{background:#f8fafd;border-color:var(--line2)}
+.cue.cur{background:var(--brand-soft);border-color:#c5d6fd}
+.cue.edited{background:#fffbf0;border-color:#f5e3bb}
+.cue.edited.cur{background:#fff7e6;border-color:#eccf94}
+.cue.bad{border-color:#f5c9ca}
+
+.c-no{
+  font-family:var(--mono);font-size:11px;color:var(--ink3);width:26px;
+  text-align:right;flex-shrink:0;padding-top:4px;
+}
+.c-time{
+  font-family:var(--mono);font-size:10.5px;color:var(--ink3);width:104px;
+  flex-shrink:0;padding-top:3px;line-height:1.5;
+}
+.c-time .dur{color:#b6bfcb}
+.c-main{flex:1;min-width:0}
+.c-text{
+  font-size:13.5px;line-height:1.62;color:var(--ink);
+  padding:2px 6px;border-radius:5px;border:1px solid transparent;
+  outline:none;white-space:pre-wrap;word-break:break-word;
+  min-height:24px;transition:border-color .12s,background .12s;
+}
+.c-text:hover{border-color:var(--line)}
+.c-text:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px var(--brand-soft)}
+.c-text[contenteditable="false"]{cursor:pointer}
+.c-flag{
+  font-size:10px;color:var(--warn);font-weight:700;
+  position:absolute;right:9px;top:8px;
+}
+.c-acts{
+  display:flex;gap:3px;align-items:flex-start;flex-shrink:0;opacity:0;transition:opacity .12s;
+}
+.cue:hover .c-acts,.cue.cur .c-acts{opacity:1}
+.c-acts button{padding:3px 6px;font-size:11px;border-radius:6px}
+
+.empty{padding:48px 20px;text-align:center;color:var(--ink3)}
+.empty svg{width:34px;height:34px;color:#ccd5e2;margin-bottom:10px}
+.empty p{font-size:12.5px;margin-bottom:4px}
+.empty .sub{font-size:11.5px;color:#a8b1bd}
+
+/* 底部状态条 */
+.r-foot{
+  padding:8px 16px;border-top:1px solid var(--line);background:#fbfcfe;
+  display:flex;align-items:center;gap:10px;flex-shrink:0;font-size:11.5px;color:var(--ink3);
+  flex-wrap:wrap;
+}
+.kbd{
+  font-family:var(--mono);font-size:10.5px;background:#fff;border:1px solid var(--line);
+  border-bottom-width:2px;border-radius:4px;padding:0 5px;color:var(--ink2);
+}
+
+/* Toast */
+#toasts{position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;
+  gap:8px;z-index:300;pointer-events:none}
+.toast{
+  background:#232b38;color:#fff;border-radius:10px;padding:9px 15px;font-size:12.5px;
+  box-shadow:0 8px 24px rgba(10,18,40,.28);animation:tin .22s cubic-bezier(.2,.9,.3,1.2);
+  max-width:340px;display:flex;align-items:center;gap:8px;
+}
+.toast.ok{background:#0f8f49}
+.toast.err{background:#cb2f34}
+@keyframes tin{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
+
+.dlg-mask{position:fixed;inset:0;background:rgba(18,24,38,.42);backdrop-filter:blur(3px);
+  display:none;align-items:center;justify-content:center;z-index:200;padding:28px}
+.dlg-mask.on{display:flex}
+.dlg{background:#fff;border-radius:14px;width:100%;max-width:560px;
+  box-shadow:0 20px 60px rgba(10,18,40,.3);overflow:hidden}
+.dlg-hd{padding:14px 20px;border-bottom:1px solid var(--line);font-weight:700;font-size:14px}
+.dlg-bd{padding:14px 20px;max-height:56vh;overflow:auto}
+.dlg-bd p{font-size:12.5px;color:var(--ink2);margin-bottom:10px}
+.dlg-ft{padding:12px 20px;border-top:1px solid var(--line);display:flex;
+  gap:8px;justify-content:flex-end;background:#fbfcfe}
+textarea{
+  width:100%;font-family:var(--mono);font-size:12px;line-height:1.6;
+  border:1px solid var(--line);border-radius:8px;padding:8px 10px;outline:none;
+  resize:vertical;min-height:120px;color:var(--ink);
+}
+textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+
+/* ================= 时间轴编辑器 ================= */
+.tl{
+  flex-shrink:0;height:196px;background:#fff;border-top:1px solid var(--line);
+  display:flex;flex-direction:column;user-select:none;
+}
+.tl-bar{
+  display:flex;align-items:center;gap:8px;padding:6px 12px;
+  border-bottom:1px solid var(--line2);flex-shrink:0;
+}
+.tl-time{
+  font-family:var(--mono);font-size:13px;font-weight:700;color:var(--brand-d);
+  min-width:78px;font-variant-numeric:tabular-nums;
+}
+.tl-btn{
+  border:1px solid var(--line);background:#fff;border-radius:7px;
+  padding:3px 9px;font-size:11.5px;color:var(--ink2);cursor:pointer;display:flex;
+  align-items:center;gap:4px;
+}
+.tl-btn:hover{background:#f7f9fc;border-color:#d3dae4;color:var(--ink)}
+.tl-btn:disabled{opacity:.4;cursor:not-allowed}
+.tl-btn svg{width:12px;height:12px}
+.tl-zoom{display:flex;align-items:center;gap:6px;margin-left:auto}
+.tl-zoom input[type=range]{width:130px;accent-color:var(--brand);cursor:pointer}
+.tl-hint{font-size:11px;color:var(--ink3)}
+
+.tl-scroll{
+  flex:1;overflow-x:auto;overflow-y:hidden;position:relative;min-height:0;
+}
+.tl-scroll::-webkit-scrollbar{height:9px}
+.tl-inner{position:relative;height:100%;min-width:100%}
+
+/* 时间刻度 */
+.tl-ruler{
+  position:sticky;top:0;height:20px;background:#fafbfd;
+  border-bottom:1px solid var(--line2);z-index:3;pointer-events:none;
+}
+.tl-tick{position:absolute;top:0;height:100%;border-left:1px solid #e6ebf2}
+.tl-tick span{
+  position:absolute;left:3px;top:2px;font-family:var(--mono);font-size:9.5px;color:#9aa4b2;
+}
+.tl-tick.major span{color:#6b7684;font-weight:600}
+
+/* 字幕条轨道 */
+.tl-cues{
+  position:relative;height:44px;background:#fbfcfe;border-bottom:1px solid var(--line2);
+}
+.tl-cue{
+  position:absolute;top:4px;height:36px;border-radius:6px;
+  background:linear-gradient(180deg,#e3ecff,#d3e0fd);
+  border:1px solid #b9cdfa;color:#1f3d7a;
+  font-size:11.5px;line-height:1.25;padding:3px 8px;overflow:hidden;
+  cursor:grab;white-space:nowrap;text-overflow:ellipsis;
+  box-shadow:0 1px 3px rgba(40,80,180,.1);
+  transition:background .1s,box-shadow .1s;
+}
+.tl-cue:hover{background:linear-gradient(180deg,#d8e5ff,#c7d8fb);box-shadow:0 2px 7px rgba(40,80,180,.18)}
+.tl-cue.sel{
+  background:linear-gradient(180deg,#4a78f7,#3b6ef5);border-color:#2c58d6;color:#fff;
+  box-shadow:0 2px 10px rgba(59,110,245,.4);z-index:2;
+}
+.tl-cue.dragging{cursor:grabbing;opacity:.92;z-index:5}
+.tl-cue.edited{background:linear-gradient(180deg,#fff3d9,#ffe9bd);border-color:#e9c778;color:#7a5410}
+.tl-cue.edited.sel{background:linear-gradient(180deg,#e5a92a,#d99a1c);border-color:#c08a12;color:#fff}
+/* 左右拖拽手柄 */
+.tl-cue .h{
+  position:absolute;top:0;bottom:0;width:7px;cursor:ew-resize;
+}
+.tl-cue .h.l{left:0;border-radius:6px 0 0 6px}
+.tl-cue .h.r{right:0;border-radius:0 6px 6px 0}
+.tl-cue .h:hover{background:rgba(255,255,255,.55)}
+.tl-cue .lbl{display:block;overflow:hidden;text-overflow:ellipsis;pointer-events:none;
+  padding:0 7px;height:100%}
+
+/* 波形 */
+.tl-wave{
+  position:relative;height:74px;background:#fff;
+}
+.tl-wave canvas{display:block;height:74px}
+.tl-wave .silent{
+  position:absolute;top:0;bottom:0;background:rgba(224,139,10,.07);
+  pointer-events:none;
+}
+.tl-wave .loading{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:11.5px;color:var(--ink3);background:rgba(255,255,255,.7);
+}
+
+/* 播放头 */
+.tl-head{
+  position:absolute;top:0;bottom:0;width:1px;background:var(--err);
+  z-index:6;pointer-events:none;box-shadow:0 0 4px rgba(224,57,62,.5);
+}
+.tl-head::before{
+  content:'';position:absolute;top:0;left:-4px;width:9px;height:9px;
+  background:var(--err);border-radius:0 0 4px 4px;
+}
+
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 顶栏 -->
+  <div class="top">
+    <div class="logo">校</div>
+    <div class="brand">字幕校对<small>对照音轨逐句修正</small></div>
+    <div class="top-mid">
+      <div class="file-chip" id="chipVideo" title="当前视频">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3V9z"/></svg>
+        <span class="nm" id="videoName">未载入</span>
+      </div>
+    </div>
+    <div class="top-right">
+      <button id="btnLoadSub">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>载入字幕
+      </button>
+      <button id="btnSave" class="primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>保存
+      </button>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- 左：播放器 -->
+    <div class="left">
+      <div class="stage" id="stage">
+        <div class="ph" id="stagePh">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3V9z"/></svg>
+          <div>还没有载入视频</div>
+          <div style="font-size:11.5px;margin-top:4px;color:#4a5364">从主界面点「校对字幕」进入，或拖入视频</div>
+        </div>
+        <div class="suboverlay" id="subOverlay"><span id="subOverlayText" class="hide"></span></div>
+      </div>
+
+      <div class="ctrl">
+        <div class="timeline" id="timeline">
+          <div class="track"></div>
+          <div class="marks" id="marks"></div>
+          <div class="played" id="played"></div>
+          <div class="head" id="head" style="left:0"></div>
+        </div>
+        <div class="tinfo">
+          <span id="tCur">00:00.00</span>
+          <span id="tTotal">00:00.00</span>
+        </div>
+        <div class="btns">
+          <button class="icon-only" id="btnPrev" title="上一句">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 20L9 12l10-8v16zM5 19V5"/></svg>
+          </button>
+          <button class="icon-only" id="btnPlay" title="播放/暂停（空格）">
+            <svg viewBox="0 0 24 24" fill="currentColor" id="icoPlay"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <button class="icon-only" id="btnNext" title="下一句">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4l10 8-10 8V4zM19 5v14"/></svg>
+          </button>
+          <button class="icon-only" id="btnReplay" title="重播当前句（R）">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6"/><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"/></svg>
+          </button>
+          <span class="speed" id="speed" title="播放速度">1.0×</span>
+          <div class="grow"></div>
+          <label class="toggle-l" title="播放时显示字幕浮层">
+            <input type="checkbox" id="showOverlay" checked>字幕浮层
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右：字幕列表 -->
+    <div class="right">
+      <div class="r-head">
+        <h3>字幕</h3>
+        <span class="stat" id="stat">未载入</span>
+        <div class="filter" id="filterAll">
+          <button data-f="all" class="on">全部</button>
+          <button data-f="edited">已改</button>
+        </div>
+      </div>
+      <div class="r-body" id="cueBox">
+        <div class="empty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 6h16M4 11h16M4 16h9"/></svg>
+          <p>还没有字幕</p>
+          <div class="sub">点右上角「载入字幕」选择 srt 文件<br>或从主界面校对已完成的任务</div>
+        </div>
+      </div>
+      <div class="r-foot">
+        <span>点击某句跳到对应位置</span>
+        <span><span class="kbd">空格</span> 播放</span>
+        <span><span class="kbd">R</span> 重播本句</span>
+        <span><span class="kbd">↑↓</span> 上下句</span>
+        <span><span class="kbd">Ctrl+S</span> 保存</span>
+        <span class="grow" style="flex:1"></span>
+        <span id="footHint"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 时间轴编辑器 -->
+  <div class="tl">
+    <div class="tl-bar">
+      <span class="tl-time" id="tlTime">00:00.00</span>
+      <button class="tl-btn" id="tlUndo" title="撤销 (Ctrl+Z)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6"/><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10"/></svg>撤销
+      </button>
+      <button class="tl-btn" id="tlRedo" title="重做 (Ctrl+Y)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.5 15a9 9 0 1 1-2.1-9.4L23 10"/></svg>重做
+      </button>
+      <button class="tl-btn" id="tlSplit" title="在播放头处拆分当前句">拆分</button>
+      <button class="tl-btn" id="tlMerge" title="与下一句合并">合并</button>
+      <span class="tl-zoom">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;color:var(--ink3)"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6"/></svg>
+        <input type="range" id="tlZoom" min="0" max="100" value="30" title="时间轴缩放">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;color:var(--ink3)"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6M11 8v6"/></svg>
+      </span>
+      <span class="tl-hint" id="tlInfo"></span>
+    </div>
+    <div class="tl-scroll" id="tlScroll">
+      <div class="tl-inner" id="tlInner">
+        <div class="tl-ruler" id="tlRuler"></div>
+        <div class="tl-cues" id="tlCues"></div>
+        <div class="tl-wave" id="tlWave">
+          <canvas id="tlCanvas"></canvas>
+          <div class="loading" id="tlWaveLoading" style="display:none">正在提取波形…</div>
+        </div>
+        <div class="tl-head" id="tlHead" style="left:0"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 批量纠错对话框 -->
+<div class="dlg-mask" id="fixMask">
+  <div class="dlg">
+    <div class="dlg-hd">批量纠错</div>
+    <div class="dlg-bd">
+      <p>每行一条，格式 <code style="font-family:var(--mono);background:#f2f4f7;padding:1px 5px;border-radius:4px">错误词=正确词</code>。
+         将对全部字幕做替换，可撤销。</p>
+      <textarea id="fixText" placeholder="妙翠脚=妙脆角&#10;血域=雪域"></textarea>
+    </div>
+    <div class="dlg-ft">
+      <button id="fixCancel">取消</button>
+      <button id="fixApply" class="primary">应用到全部</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+/* ============================================================
+   字幕校对工作台
+   与 Python 通信走 window.pywebview.api.*
+   ============================================================ */
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+// ---------- 状态 ----------
+const S = {
+  videoUrl: '',
+  videoPath: '',
+  subPath: '',
+  cues: [],          // {index,start,end,text,orig}
+  cur: -1,           // 当前句下标
+  dirty: false,
+  filter: 'all',
+  speedIdx: 0,
+  hasVideo: false,
+};
+const SPEEDS = [1.0, 1.25, 1.5, 2.0, 0.75, 0.5];
+
+let media = null;    // video 或 audio 元素
+
+// ---------- 工具 ----------
+function toast(msg, kind='') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + kind;
+  el.innerHTML = '<span>' + escapeHtml(msg) + '</span>';
+  $('#toasts').appendChild(el);
+  setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .25s';
+                     setTimeout(()=>el.remove(), 250); }, kind==='err'?4200:2400);
+}
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtT(s){
+  s = Math.max(0, s||0);
+  const m = Math.floor(s/60), sec = Math.floor(s%60), cs = Math.floor((s%1)*100);
+  return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0')+'.'+String(cs).padStart(2,'0');
+}
+function fmtShort(s){
+  s = Math.max(0, s||0);
+  const m = Math.floor(s/60), sec = (s%60);
+  return String(m).padStart(2,'0')+':'+sec.toFixed(1).padStart(4,'0');
+}
+
+// ---------- 载入 ----------
+async function loadMedia(path, url){
+  S.videoPath = path; S.videoUrl = url;
+  $('#videoName').textContent = path.split(/[\\/]/).pop();
+
+  if (!url){
+    // 没有可播放地址（例如文件不存在或未注册），提示但仍允许编辑字幕
+    toast('未能获取播放地址，仅可编辑字幕', 'err');
+    return;
+  }
+
+  const stage = $('#stage');
+  const ph = $('#stagePh');
+  if (ph) ph.remove();
+
+  const old = media;
+  const isVideo = /\.(mp4|mkv|mov|avi|flv|wmv|webm|m4v|ts|mpg|mpeg|3gp)$/i.test(path);
+  if (isVideo){
+    media = document.createElement('video');
+    media.controls = false;   // 用我们自己的控制条
+    media.preload = 'auto';
+    media.playsInline = true;
+  } else {
+    media = document.createElement('audio');
+    media.controls = false;
+    media.preload = 'auto';
+  }
+  media.src = url;
+  media.style.width = isVideo ? 'auto' : '100%';
+  if (old) old.remove();
+  stage.insertBefore(media, $('#subOverlay'));
+
+  S.hasVideo = true;
+  bindMedia();
+}
+
+function bindMedia(){
+  if (!media) return;
+  media.addEventListener('loadedmetadata', () => {
+    $('#tTotal').textContent = fmtT(media.duration);
+    drawMarks();
+  });
+  media.addEventListener('timeupdate', () => {
+    updateProgress();
+    syncCurrentByTime(media.currentTime);
+    tlUpdateHead();          // 时间轴播放头跟随
+  });
+  media.addEventListener('play',  () => setPlayIcon(true));
+  media.addEventListener('pause', () => setPlayIcon(false));
+  media.addEventListener('ended', () => setPlayIcon(false));
+  media.addEventListener('error', () => {
+    toast('媒体加载失败，可能是编码不支持', 'err');
+  });
+}
+
+function setPlayIcon(playing){
+  $('#icoPlay').innerHTML = playing
+    ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>'
+    : '<path d="M8 5v14l11-7z"/>';
+}
+
+// ---------- 字幕渲染 ----------
+function renderCues(){
+  const box = $('#cueBox');
+  const list = S.filter === 'edited'
+    ? S.cues.filter(c => c.text !== c.orig)
+    : S.cues;
+
+  if (!S.cues.length){
+    box.innerHTML = `<div class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 6h16M4 11h16M4 16h9"/></svg>
+      <p>还没有字幕</p><div class="sub">点右上角「载入字幕」选择 srt 文件</div></div>`;
+    updateStat();
+    return;
+  }
+  if (!list.length){
+    box.innerHTML = `<div class="empty"><p>没有符合条件的字幕</p>
+      <div class="sub">切回「全部」查看</div></div>`;
+    updateStat();
+    return;
+  }
+
+  box.innerHTML = list.map(c => {
+    const i = S.cues.indexOf(c);
+    const edited = c.text !== c.orig;
+    const cls = ['cue'];
+    if (i === S.cur) cls.push('cur');
+    if (edited) cls.push('edited');
+    return `<div class="${cls.join(' ')}" data-i="${i}">
+      <div class="c-no">${i+1}</div>
+      <div class="c-time">${fmtT(c.start)}<br><span class="dur">${fmtT(c.end)} · ${c.end-c.start < 0.1 ? '0.0' : (c.end-c.start).toFixed(1)}s</span></div>
+      <div class="c-main">
+        <div class="c-text" contenteditable="true" spellcheck="false"
+             data-i="${i}">${escapeHtml(c.text)}</div>
+      </div>
+      <div class="c-acts">
+        <button data-act="play" data-i="${i}" title="播放本句">▶</button>
+        <button data-act="setstart" data-i="${i}" title="把开始时间设为当前播放位置">⟦</button>
+        <button data-act="setend" data-i="${i}" title="把结束时间设为当前播放位置">⟧</button>
+      </div>
+      ${edited ? '<div class="c-flag">已改</div>' : ''}
+    </div>`;
+  }).join('');
+
+  bindCueEvents();
+  updateStat();
+  drawMarks();
+  tlRender();          // 列表与时间轴保持同步
+}
+
+function bindCueEvents(){
+  // 点击行 -> 跳转
+  $$('#cueBox .cue').forEach(row => {
+    row.addEventListener('mousedown', (e) => {
+      // 编辑框内的操作不触发跳转
+      if (e.target.classList.contains('c-text')) return;
+      if (e.target.closest('.c-acts')) return;
+      const i = +row.dataset.i;
+      jumpTo(i);
+    });
+  });
+  // 编辑内容
+  $$('#cueBox .c-text').forEach(el => {
+    el.addEventListener('input', () => {
+      const i = +el.dataset.i;
+      S.cues[i].text = el.textContent;
+      S.dirty = true;
+      const row = el.closest('.cue');
+      row.classList.toggle('edited', S.cues[i].text !== S.cues[i].orig);
+      const flag = row.querySelector('.c-flag');
+      if (S.cues[i].text !== S.cues[i].orig && !flag){
+        const f = document.createElement('div'); f.className='c-flag'; f.textContent='已改';
+        row.appendChild(f);
+      } else if (S.cues[i].text === S.cues[i].orig && flag){ flag.remove(); }
+      updateStat();
+    });
+    el.addEventListener('focus', () => {
+      const i = +el.dataset.i;
+      S.cur = i; highlightCurrent();
+      if (media && !media.paused === false) {} // 不自动播放，避免打断
+    });
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey){
+        e.preventDefault();
+        // 回车跳到下一句并聚焦
+        const i = +el.dataset.i;
+        focusCue(i+1);
+      }
+      if (e.key === 'Escape') el.blur();
+    });
+  });
+  // 操作按钮
+  $$('#cueBox [data-act]').forEach(b => {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const i = +b.dataset.i, act = b.dataset.act;
+      if (act === 'play'){ S.cur = i; playCue(i); }
+      else if (act === 'setstart' && media){
+        S.cues[i].start = media.currentTime;
+        if (S.cues[i].end < S.cues[i].start) S.cues[i].end = S.cues[i].start + 0.5;
+        S.dirty = true; renderCues(); toast('开始时间已设为 '+fmtT(S.cues[i].start), 'ok');
+      }
+      else if (act === 'setend' && media){
+        S.cues[i].end = media.currentTime;
+        if (S.cues[i].end < S.cues[i].start) S.cues[i].start = Math.max(0, S.cues[i].end - 0.5);
+        S.dirty = true; renderCues(); toast('结束时间已设为 '+fmtT(S.cues[i].end), 'ok');
+      }
+    });
+  });
+}
+
+function updateStat(){
+  const edited = S.cues.filter(c => c.text !== c.orig).length;
+  if (!S.cues.length){ $('#stat').textContent = '未载入'; return; }
+  let s = `共 ${S.cues.length} 句`;
+  if (edited) s += ` · <span style="color:var(--warn);font-weight:600">${edited} 处已改</span>`;
+  if (S.dirty) s += ' · <span style="color:var(--err)">未保存</span>';
+  $('#stat').innerHTML = s;
+}
+
+// ---------- 播放控制 ----------
+function jumpTo(i, autoplay){
+  if (i < 0 || i >= S.cues.length) return;
+  S.cur = i;
+  const c = S.cues[i];
+  if (media){
+    // 提前 0.15 秒起播，避免切掉句首第一个字
+    media.currentTime = Math.max(0, c.start - 0.15);
+    if (autoplay) media.play().catch(()=>{});
+  }
+  highlightCurrent();
+  scrollToCurrent();
+}
+
+function playCue(i){
+  jumpTo(i, true);
+  // 到句末自动暂停（校准时很实用：听完这句就停）
+  const c = S.cues[i];
+  if (!media) return;
+  const stopAt = c.end + 0.15;
+  const onTime = () => {
+    if (media.currentTime >= stopAt){
+      media.pause();
+      media.removeEventListener('timeupdate', onTime);
+    }
+  };
+  media.addEventListener('timeupdate', onTime);
+}
+
+function highlightCurrent(){
+  $$('#cueBox .cue').forEach(row => {
+    row.classList.toggle('cur', +row.dataset.i === S.cur);
+  });
+  syncOverlay();
+}
+
+function scrollToCurrent(){
+  const row = document.querySelector(`#cueBox .cue[data-i="${S.cur}"]`);
+  if (row){
+    const box = $('#cueBox');
+    const rt = row.offsetTop, rb = rt + row.offsetHeight;
+    if (rt < box.scrollTop || rb > box.scrollTop + box.clientHeight - 20){
+      box.scrollTop = rt - box.clientHeight * 0.35;
+    }
+  }
+}
+
+function focusCue(i){
+  const row = document.querySelector(`#cueBox .cue[data-i="${i}"]`);
+  if (!row) return;
+  jumpTo(i);
+  const el = row.querySelector('.c-text');
+  if (el) el.focus();
+}
+
+function syncCurrentByTime(t){
+  // 播放中自动高亮当前句（不改变用户正在编辑的焦点）
+  let idx = -1;
+  for (let i=0;i<S.cues.length;i++){
+    if (t >= S.cues[i].start - 0.05 && t <= S.cues[i].end + 0.05){ idx = i; break; }
+  }
+  if (idx >= 0 && idx !== S.cur){
+    S.cur = idx;
+    highlightCurrent();
+    scrollToCurrent();
+  }
+  syncOverlay();
+}
+
+function syncOverlay(){
+  const sp = $('#subOverlayText');
+  const c = S.cues[S.cur];
+  const show = $('#showOverlay').checked && c && media && !media.paused
+               && media.currentTime >= c.start - 0.2 && media.currentTime <= c.end + 0.4;
+  if (show){ sp.textContent = c.text; sp.classList.remove('hide'); }
+  else sp.classList.add('hide');
+}
+
+function updateProgress(){
+  if (!media || !media.duration) return;
+  const r = media.currentTime / media.duration;
+  $('#played').style.width = (r*100) + '%';
+  $('#head').style.left = (r*100) + '%';
+  $('#tCur').textContent = fmtT(media.currentTime);
+}
+
+function drawMarks(){
+  const box = $('#marks');
+  if (!media || !media.duration || !S.cues.length){ box.innerHTML=''; return; }
+  const d = media.duration;
+  box.innerHTML = S.cues.map((c,i) => {
+    const left = Math.min(100, Math.max(0, c.start / d * 100));
+    return `<div class="mk${i===S.cur?' cur':''}" style="left:${left}%"></div>`;
+  }).join('');
+}
+
+// ---------- 交互绑定 ----------
+function bindUI(){
+  // 播放/暂停
+  $('#btnPlay').onclick = () => {
+    if (!media){ toast('还没有载入视频', 'err'); return; }
+    media.paused ? media.play().catch(()=>{}) : media.pause();
+  };
+  $('#btnPrev').onclick = () => { if (S.cur > 0) jumpTo(S.cur-1, false); };
+  $('#btnNext').onclick = () => { if (S.cur < S.cues.length-1) jumpTo(S.cur+1, false); };
+  $('#btnReplay').onclick = () => { if (S.cur >= 0) playCue(S.cur); };
+
+  // 播放速度
+  $('#speed').onclick = () => {
+    S.speedIdx = (S.speedIdx + 1) % SPEEDS.length;
+    const v = SPEEDS[S.speedIdx];
+    if (media) media.playbackRate = v;
+    $('#speed').textContent = v.toFixed(2).replace(/0$/,'') + '×';
+  };
+
+  // 时间轴点击定位
+  $('#timeline').onclick = (e) => {
+    if (!media || !media.duration) return;
+    const r = $('#timeline').getBoundingClientRect();
+    const p = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    media.currentTime = p * media.duration;
+  };
+
+  $('#showOverlay').onchange = syncOverlay;
+
+  // 筛选
+  $$('#filterAll button').forEach(b => {
+    b.onclick = () => {
+      $$('#filterAll button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      S.filter = b.dataset.f;
+      renderCues();
+    };
+  });
+
+  // 载入字幕
+  $('#btnLoadSub').onclick = async () => {
+    const r = await window.pywebview.api.pick_subtitle();
+    if (r) applySubtitle(r);
+  };
+
+  // 保存
+  $('#btnSave').onclick = saveNow;
+
+  // 快捷键
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key.toLowerCase() === 's'){ e.preventDefault(); saveNow(); return; }
+    const inEdit = document.activeElement && document.activeElement.classList
+                   && document.activeElement.classList.contains('c-text');
+    if (e.key === ' ' && !inEdit){
+      e.preventDefault(); $('#btnPlay').click();
+    } else if (e.key.toLowerCase() === 'r' && !inEdit){
+      if (S.cur >= 0) playCue(S.cur);
+    } else if (e.key === 'ArrowDown' && !inEdit){
+      e.preventDefault(); if (S.cur < S.cues.length-1) jumpTo(S.cur+1, false);
+    } else if (e.key === 'ArrowUp' && !inEdit){
+      e.preventDefault(); if (S.cur > 0) jumpTo(S.cur-1, false);
+    }
+  });
+}
+
+async function saveNow(){
+  if (!S.cues.length){ toast('没有字幕可保存', 'err'); return; }
+  const target = S.subPath;
+  if (!target){ toast('不知道保存到哪，请先载入字幕', 'err'); return; }
+  try {
+    const r = await window.pywebview.api.save_subtitle(target, S.cues.map(c => ({
+      start: c.start, end: c.end, text: c.text,
+    })));
+    if (r && r.ok){
+      S.dirty = false;
+      S.cues.forEach(c => { c.orig = c.text; });
+      renderCues();
+      toast('已保存到 ' + (r.path || target).split(/[\\/]/).pop(), 'ok');
+    } else {
+      toast('保存失败：' + ((r && r.error) || '未知错误'), 'err');
+    }
+  } catch (e){ toast('保存失败：' + e, 'err'); }
+}
+
+function applySubtitle(data, opt){
+  opt = opt || {};
+  if (!data || !data.cues){ toast('字幕载入失败', 'err'); return; }
+  S.subPath = data.path || '';
+  S.cues = data.cues.map(c => ({...c, orig: c.text}));
+  S.cur = S.cues.length ? 0 : -1;
+  S.dirty = false;
+  renderCues();
+  // 若还没视频、且传入了视频信息，顺带载入（失败不阻断）
+  if (!opt.skipVideo && data.videoPath && !S.hasVideo){
+    loadMedia(data.videoPath, data.videoUrl).catch(()=>{});
+  }
+  toast(`已载入 ${S.cues.length} 句字幕`, 'ok');
+}
+
+// ==================== 时间轴编辑器 ====================
+/* 设计要点：
+   - PXPS（每秒像素）由缩放滑块控制，所有元素按它定位
+   - 字幕条可整体拖动（改时间）、拖左右边缘（改起止）
+   - 波形用 canvas 画，一次绘制整段，缩放时重画（数据已缓存）
+   - 撤销/重做记录"整份字幕快照"，简单可靠（字幕量小，内存无压力）
+*/
+const TL = {
+  pxps: 60,          // 每秒多少像素
+  wave: null,        // 波形数据
+  waveFor: '',       // 波形对应的媒体路径
+  hist: [],          // 撤销栈 [{cues, cur}]
+  future: [],        // 重做栈
+  drag: null,        // 当前拖动状态
+  minDur: 0.25,      // 单句最小时长（秒）
+};
+
+const MIN_PXPS = 8, MAX_PXPS = 600;
+
+function tlDuration(){
+  if (media && media.duration) return media.duration;
+  if (S.cues.length) return S.cues[S.cues.length-1].end + 1;
+  return 60;
+}
+function t2x(t){ return t * TL.pxps; }
+function x2t(x){ return x / TL.pxps; }
+
+// ---- 重建时间轴（结构变化时调用）
+function tlRender(){
+  const inner = $('#tlInner');
+  const dur = tlDuration();
+  const w = Math.max($('#tlScroll').clientWidth, dur * TL.pxps);
+  inner.style.width = w + 'px';
+
+  tlRenderRuler(dur, w);
+  tlRenderCues();
+  tlRenderWave();
+  tlUpdateHead();
+  tlUpdateInfo();
+}
+
+function tlRenderRuler(dur, w){
+  // 刻度间隔随缩放变化，保证标签不挤在一起
+  const targets = [0.5,1,2,5,10,15,30,60,120,300,600];
+  let step = 1;
+  for (const t of targets){ if (t * TL.pxps >= 62){ step = t; break; } else step = t; }
+  let html = '';
+  for (let t = 0; t <= dur + 1e-6; t += step){
+    const x = t2x(t);
+    if (x > w) break;
+    const major = Math.abs(t % (step*2)) < 1e-6;
+    html += `<div class="tl-tick${major?' major':''}" style="left:${x}px">
+      <span>${fmtTick(t, step)}</span></div>`;
+  }
+  $('#tlRuler').innerHTML = html;
+  $('#tlRuler').style.width = w + 'px';
+}
+
+function fmtTick(t, step){
+  const m = Math.floor(t/60), s = t % 60;
+  const mm = String(m).padStart(2,'0');
+  if (step < 1) return `${mm}:${s.toFixed(1).padStart(4,'0')}`;
+  return `${mm}:${String(Math.round(s)).padStart(2,'0')}`;
+}
+
+function tlRenderCues(){
+  const box = $('#tlCues');
+  const dur = tlDuration();
+  box.style.width = Math.max($('#tlScroll').clientWidth, dur * TL.pxps) + 'px';
+  box.innerHTML = S.cues.map((c,i) => {
+    const x = t2x(c.start);
+    const w = Math.max(6, t2x(c.end - c.start));
+    const edited = c.text !== c.orig;
+    const cls = ['tl-cue'];
+    if (i === S.cur) cls.push('sel');
+    if (edited) cls.push('edited');
+    return `<div class="${cls.join(' ')}" data-i="${i}" style="left:${x}px;width:${w}px" title="${escapeHtml(c.text)}">
+      <div class="h l"></div>
+      <span class="lbl">${escapeHtml(c.text.replace(/\n/g,' '))}</span>
+      <div class="h r"></div>
+    </div>`;
+  }).join('');
+  tlBindCueDrag();
+}
+
+function tlRenderWave(){
+  const cv = $('#tlCanvas');
+  const dur = tlDuration();
+  const w = Math.max($('#tlScroll').clientWidth, Math.ceil(dur * TL.pxps));
+  const h = 74;
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = w * dpr; cv.height = h * dpr;
+  cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+
+  if (!TL.wave || !TL.wave.peaks || !TL.wave.peaks.length){
+    // 没有波形时画一条占位中线
+    ctx.strokeStyle = '#e8edf4'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0,h/2); ctx.lineTo(w,h/2); ctx.stroke();
+    return;
+  }
+
+  const peaks = TL.wave.peaks;
+  const peak = TL.wave.peak || 1;
+  const n = peaks.length;
+  const perPeak = (TL.wave.duration || dur) / n;   // 每个点代表多少秒
+  const mid = h/2;
+
+  // 静音区背景（低于阈值的地方淡黄底，一眼看出说话间隙）
+  const th = peak * 0.06;
+  ctx.fillStyle = 'rgba(224,139,10,.07)';
+  let runStart = -1;
+  for (let i=0;i<=n;i++){
+    const sil = i < n && peaks[i] < th;
+    if (sil && runStart < 0) runStart = i;
+    else if (!sil && runStart >= 0){
+      const x0 = t2x(runStart * perPeak), x1 = t2x(i * perPeak);
+      if (x1 - x0 > 1.5) ctx.fillRect(x0, 0, x1-x0, h);
+      runStart = -1;
+    }
+  }
+
+  // 波形主体
+  ctx.fillStyle = '#5b85f8';
+  const barW = Math.max(1, w / (n * (dur / (TL.wave.duration||dur))));
+  for (let i=0;i<n;i++){
+    const t = i * perPeak;
+    const x = t2x(t);
+    if (x > w) break;
+    const amp = (peaks[i] / peak) * (h/2 - 4);
+    const bw = Math.max(1, TL.pxps * perPeak * 0.85);
+    ctx.fillRect(x, mid - amp, bw, Math.max(1, amp*2));
+  }
+}
+
+function tlUpdateHead(){
+  const el = $('#tlHead');
+  const t = media ? media.currentTime : 0;
+  el.style.left = t2x(t) + 'px';
+  el.style.height = $('#tlInner').offsetHeight + 'px';
+  // 播放中让播放头保持在可视区内
+  const sc = $('#tlScroll');
+  if (sc && media && !media.paused){
+    const x = t2x(t);
+    const left = sc.scrollLeft, right = left + sc.clientWidth;
+    if (x < left + 40 || x > right - 80){
+      sc.scrollLeft = Math.max(0, x - sc.clientWidth * 0.35);
+    }
+  }
+}
+
+function tlUpdateInfo(){
+  const dur = tlDuration();
+  const n = S.cues.length;
+  const edited = S.cues.filter(c => c.text !== c.orig).length;
+  $('#tlInfo').textContent = `${n} 句` + (edited? ` · ${edited} 已改`:'')
+    + ` · ${TL.pxps.toFixed(0)} px/s · 全长 ${fmtT(dur).slice(0,5)}`;
+  $('#tlUndo').disabled = TL.hist.length === 0;
+  $('#tlRedo').disabled = TL.future.length === 0;
+}
+
+// ---- 撤销/重做
+function tlSnapshot(){
+  return {
+    cues: S.cues.map(c => ({...c})),
+    cur: S.cur,
+  };
+}
+function tlPushHist(){
+  TL.hist.push(tlSnapshot());
+  if (TL.hist.length > 80) TL.hist.shift();
+  TL.future.length = 0;
+  tlUpdateInfo();
+}
+function tlUndo(){
+  if (!TL.hist.length) return;
+  TL.future.push(tlSnapshot());
+  const st = TL.hist.pop();
+  S.cues = st.cues; S.cur = st.cur; S.dirty = true;
+  renderCues(); tlRender(); tlUpdateInfo();
+  toast('已撤销', 'ok');
+}
+function tlRedo(){
+  if (!TL.future.length) return;
+  TL.hist.push(tlSnapshot());
+  const st = TL.future.pop();
+  S.cues = st.cues; S.cur = st.cur; S.dirty = true;
+  renderCues(); tlRender(); tlUpdateInfo();
+  toast('已重做', 'ok');
+}
+
+// ---- 拖动交互
+function tlBindCueDrag(){
+  $$('#tlCues .tl-cue').forEach(el => {
+    el.addEventListener('mousedown', (e) => {
+      const i = +el.dataset.i;
+      const mode = e.target.classList.contains('h')
+                 ? (e.target.classList.contains('l') ? 'resize-l' : 'resize-r')
+                 : 'move';
+      TL.drag = {
+        i, mode,
+        x0: e.clientX,
+        start0: S.cues[i].start,
+        end0: S.cues[i].end,
+        moved: false,
+      };
+      el.classList.add('dragging');
+      S.cur = i; highlightCurrent();
+      tlRenderCues();
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  });
+}
+
+document.addEventListener('mousemove', (e) => {
+  if (!TL.drag) return;
+  const d = TL.drag;
+  const dt = (e.clientX - d.x0) / TL.pxps;
+  if (Math.abs(e.clientX - d.x0) > 2) d.moved = true;
+  const c = S.cues[d.i];
+  const dur = tlDuration();
+
+  if (d.mode === 'move'){
+    let ns = d.start0 + dt, ne = d.end0 + dt;
+    // 不出界
+    if (ns < 0){ ne -= ns; ns = 0; }
+    if (ne > dur){ ns -= (ne - dur); ne = dur; }
+    c.start = Math.max(0, ns); c.end = Math.min(dur, ne);
+  } else if (d.mode === 'resize-l'){
+    c.start = Math.max(0, Math.min(d.start0 + dt, c.end - TL.minDur));
+  } else if (d.mode === 'resize-r'){
+    c.end = Math.min(dur, Math.max(d.end0 + dt, c.start + TL.minDur));
+  }
+  // 只重排，不重建（保性能）
+  tlRenderCues();
+  tlRenderWave();
+  tlUpdateHead();
+  updateStat();
+});
+
+document.addEventListener('mouseup', () => {
+  if (!TL.drag) return;
+  const d = TL.drag;
+  TL.drag = null;
+  const el = document.querySelector(`#tlCues .tl-cue[data-i="${d.i}"]`);
+  if (el) el.classList.remove('dragging');
+  if (d.moved){
+    S.dirty = true;
+    tlPushHist();
+    tlRenderCues();
+    renderCues();
+    // 拖完把播放头移到该句起点，方便立即试听
+    if (media) media.currentTime = Math.max(0, S.cues[d.i].start - 0.1);
+    toast(`已调整：${fmtT(S.cues[d.i].start)} → ${fmtT(S.cues[d.i].end)}`, 'ok');
+  } else {
+    // 只是点击 -> 跳转播放
+    jumpTo(d.i, false);
+  }
+});
+
+// ---- 事件绑定
+function tlBind(){
+  $('#tlZoom').addEventListener('input', (e) => {
+    const v = +e.target.value / 100;
+    TL.pxps = MIN_PXPS + (MAX_PXPS - MIN_PXPS) * Math.pow(v, 1.8);
+    tlRender();
+  });
+  $('#tlUndo').onclick = tlUndo;
+  $('#tlRedo').onclick = tlRedo;
+
+  // 拆分：在播放头处把当前句切成两句
+  $('#tlSplit').onclick = () => {
+    if (S.cur < 0 || !media) return;
+    const c = S.cues[S.cur];
+    const t = media.currentTime;
+    if (t <= c.start + TL.minDur || t >= c.end - TL.minDur){
+      toast('播放头要落在句子中间才能拆分', 'err'); return;
+    }
+    const words = c.text.split(/(?<=[，。！？；,.!?;])/).filter(x=>x.trim());
+    const half = Math.max(1, Math.round(words.length / 2));
+    const t1 = words.slice(0, half).join('');
+    const t2 = words.slice(half).join('');
+    tlPushHist();
+    S.cues.splice(S.cur, 1,
+      {start:c.start, end:t, text:t1, orig:t1, index:0},
+      {start:t, end:c.end, text:t2, orig:t2, index:0});
+    S.dirty = true;
+    tlRender(); renderCues();
+    toast('已拆分为两句', 'ok');
+  };
+
+  // 合并：与下一句合并
+  $('#tlMerge').onclick = () => {
+    if (S.cur < 0 || S.cur >= S.cues.length-1) return;
+    const a = S.cues[S.cur], b = S.cues[S.cur+1];
+    if (b.start - a.end > 1.5){
+      toast('两句间隔太大，不适合合并', 'err'); return;
+    }
+    tlPushHist();
+    const merged = {start:a.start, end:b.end,
+                    text:(a.text.trim() + b.text.trim()), orig:'', index:0};
+    merged.orig = merged.text;
+    S.cues.splice(S.cur, 2, merged);
+    S.dirty = true;
+    tlRender(); renderCues();
+    toast('已合并', 'ok');
+  };
+
+  // 键盘撤销重做
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key.toLowerCase() === 'z'){ e.preventDefault(); tlUndo(); }
+    else if (e.ctrlKey && (e.key.toLowerCase() === 'y'
+             || (e.shiftKey && e.key.toLowerCase() === 'z'))){ e.preventDefault(); tlRedo(); }
+  });
+
+  // 时间轴空白处点击定位
+  $('#tlRuler').addEventListener('mousedown', (e) => {
+    const r = $('#tlInner').getBoundingClientRect();
+    if (media) media.currentTime = Math.max(0, x2t(e.clientX - r.left));
+  });
+}
+
+// ---- 加载波形
+async function tlLoadWave(){
+  const path = S.videoPath;
+  if (!path) return;
+  if (TL.waveFor === path && TL.wave) { tlRenderWave(); return; }
+  $('#tlWaveLoading').style.display = '';
+  try {
+    const r = await window.pywebview.api.get_waveform(path, 0, 0, 100);
+    if (r && r.ok){
+      TL.wave = r; TL.waveFor = path;
+      tlRenderWave();
+    } else {
+      TL.wave = null;
+      if (r && r.error) toast('波形提取失败：' + r.error, 'err');
+    }
+  } catch(e){ TL.wave = null; }
+  $('#tlWaveLoading').style.display = 'none';
+}
+
+async function boot(){
+  bindUI();
+  tlBind();
+
+  // 从主界面带着视频/字幕路径进来。
+  // 注意：视频和字幕的载入要**各自独立判断** ——
+  // 早期写成"有 videoUrl 才载字幕"，结果视频路径有问题时字幕也载不进来，
+  // 而校对字幕恰恰是核心功能，不该被视频问题连坐。
+  try {
+    const init = await window.pywebview.api.review_init();
+    if (init){
+      // 字幕优先载入（校对的主角）
+      if (init.subPath){
+        try {
+          const r = await window.pywebview.api.load_subtitle(init.subPath);
+          if (r) applySubtitle(r, { skipVideo: true });
+        } catch(e){ toast('字幕载入失败：' + e, 'err'); }
+      }
+      // 视频单独处理，失败不影响字幕
+      if (init.videoPath){
+        try {
+          await loadMedia(init.videoPath, init.videoUrl || '');
+        } catch(e){ toast('视频载入失败，仍可编辑字幕', 'err'); }
+      }
+    }
+  } catch(e){ /* 允许空启动 */ }
+
+  // 首帧渲染 + 提取波形
+  tlRender();
+  if (S.videoPath) tlLoadWave();
+
+  // 窗口尺寸变化时重排（宽度影响刻度密度与画布大小）
+  let rt = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(rt);
+    rt = setTimeout(() => tlRender(), 160);
+  });
+
+  $('#footHint').textContent = S.cues.length ? '' : '等待载入字幕';
+}
+
+if (window.pywebview && window.pywebview.api) boot();
+else {
+  window.addEventListener('pywebviewready', boot);
+  let n = 0;
+  const t = setInterval(() => {
+    if (window.pywebview && window.pywebview.api){ clearInterval(t); boot(); }
+    else if (++n > 60) clearInterval(t);
+  }, 100);
+}
+</script>
+</body>
+</html>
+

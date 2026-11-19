@@ -1,0 +1,1940 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>subgen · 字幕生成</title>
+<style>
+:root{
+  --bg:#eef1f6; --card:#ffffff; --ink:#151a21; --ink2:#525b68; --ink3:#8b939f;
+  --line:#e4e8ee; --line2:#eef1f5;
+  --brand:#3b6ef5; --brand-d:#2c58d6; --brand-soft:#eef3ff;
+  --ok:#12a150; --ok-soft:#e9f8ef; --warn:#e08b0a; --warn-soft:#fdf5e6;
+  --err:#e0393e; --err-soft:#fdeded;
+  --r:14px; --r-s:10px;
+  --sh:0 1px 3px rgba(20,30,60,.05), 0 8px 24px rgba(20,30,60,.06);
+  --sh-h:0 2px 6px rgba(20,30,60,.07), 0 12px 32px rgba(20,30,60,.10);
+  --mono:'Cascadia Mono','JetBrains Mono',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:'Microsoft YaHei UI','Segoe UI',-apple-system,sans-serif;
+  background:var(--bg); color:var(--ink); font-size:13.5px; line-height:1.6;
+  overflow:hidden; user-select:none;
+}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#c9d0da;border-radius:5px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:#adb7c4;background-clip:content-box}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- 布局 ---------- */
+.app{display:flex;flex-direction:column;height:100vh;padding:14px 16px 0;gap:12px;overflow:hidden}
+.main{display:flex;gap:12px;flex:1;min-height:0;overflow:hidden}
+
+/* ---------- 顶栏 ---------- */
+.top{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.logo{
+  width:34px;height:34px;border-radius:10px;flex-shrink:0;
+  background:linear-gradient(135deg,#4f7df7,#2c58d6);
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:800;font-size:15px;letter-spacing:-.5px;
+  box-shadow:0 3px 10px rgba(59,110,245,.32);
+}
+.brand{font-size:16px;font-weight:700;letter-spacing:-.2px}
+.brand small{font-weight:400;color:var(--ink3);font-size:12px;margin-left:8px;letter-spacing:0}
+.top-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.hint{font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:5px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex-shrink:0}
+.dot.gpu{background:var(--ok)}
+.dot.cpu{background:var(--warn)}
+
+/* ---------- 卡片 ---------- */
+.card{
+  background:var(--card);border-radius:var(--r);box-shadow:var(--sh);
+  display:flex;flex-direction:column;overflow:hidden;min-height:0;
+}
+.card-hd{
+  display:flex;align-items:center;gap:10px;
+  padding:13px 16px 11px;flex-shrink:0;
+}
+.card-hd h3{font-size:13.5px;font-weight:700;letter-spacing:-.1px}
+.card-hd .cnt{font-size:11.5px;color:var(--ink3);font-weight:400}
+.card-hd .sp{margin-left:auto}
+.card-bd{padding:0 16px 14px;overflow-y:auto;overflow-x:hidden;flex:1;min-height:0}
+
+/* ---------- 日志 ---------- */
+.logbox{
+  height:100%;overflow-y:auto;overflow-x:hidden;
+  background:#fbfcfe;border:1px solid var(--line2);border-radius:var(--r-s);
+  padding:9px 10px;
+  font-family:var(--mono);font-size:11.5px;line-height:1.62;
+  display:flex;flex-direction:column;gap:1px;
+}
+.lg{display:flex;gap:7px;align-items:baseline}
+.lg .t{color:#a8b2c0;flex-shrink:0;font-variant-numeric:tabular-nums}
+.lg .m{flex:1;min-width:0;color:var(--ink2);overflow-wrap:anywhere;word-break:normal}
+/* 路径里的分隔符后允许换行，比硬断词好读 */
+.lg .m.brk{word-break:break-all}
+.lg.info  .m{color:var(--ink2)}
+.lg.ok    .m{color:#0d7d3f}
+.lg.warn  .m{color:#96650a}
+.lg.err   .m{color:#c0262b}
+.lg.stage .m{color:var(--brand-d);font-weight:600}
+.lg.file  .m{color:var(--ink);font-weight:600}
+.logbox .lg-empty{
+  color:#b6bfcb;font-family:'Microsoft YaHei UI',sans-serif;
+  font-size:12px;text-align:center;padding:26px 8px;line-height:1.9;
+}
+.logbox::-webkit-scrollbar{width:7px}
+
+/* ---------- 按钮 ---------- */
+button{
+  font-family:inherit;font-size:12.5px;cursor:pointer;
+  border:1px solid var(--line);background:#fff;color:var(--ink2);
+  border-radius:9px;padding:6px 13px;font-weight:500;
+  transition:all .13s ease; white-space:nowrap;
+}
+button:hover{background:#f7f9fc;border-color:#d3dae4;color:var(--ink)}
+button:active{transform:translateY(1px)}
+button.primary{
+  background:linear-gradient(180deg,#4a78f7,#3b6ef5);color:#fff;border-color:transparent;
+  box-shadow:0 2px 8px rgba(59,110,245,.28);font-weight:600;
+}
+button.primary:hover{background:linear-gradient(180deg,#3f6ff0,#2c58d6);color:#fff}
+button.primary:disabled{background:#c3ccdb;box-shadow:none;cursor:not-allowed;transform:none}
+button.ghost{background:transparent;border-color:transparent;color:var(--ink3);padding:5px 8px}
+button.ghost:hover{background:#f1f4f9;color:var(--ink)}
+button.danger{color:var(--err);border-color:#f5d4d5}
+button.danger:hover{background:var(--err-soft);border-color:#eeafb1}
+button svg{width:13px;height:13px;vertical-align:-2px;margin-right:5px}
+button.icon-only{padding:6px 8px}
+button.icon-only svg{margin:0}
+
+/* ---------- 拖放区 ---------- */
+.drop{
+  border:1.5px dashed #ccd5e2;border-radius:var(--r-s);
+  background:#fafbfd; padding:20px 16px;text-align:center;
+  transition:all .16s ease;cursor:pointer;flex-shrink:0;
+}
+.drop:hover{border-color:#a9bcdd;background:#f6f9ff}
+.drop.on{
+  border-color:var(--brand);background:var(--brand-soft);
+  box-shadow:inset 0 0 0 3px rgba(59,110,245,.07);
+}
+.drop-ico{
+  width:38px;height:38px;margin:0 auto 8px;border-radius:11px;
+  background:#fff;border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 6px rgba(20,30,60,.06);
+}
+.drop-ico svg{width:18px;height:18px;color:var(--brand)}
+.drop-t{font-size:13px;font-weight:600;color:var(--ink);margin-bottom:3px}
+.drop-s{font-size:11.5px;color:var(--ink3)}
+
+/* ---------- 队列 ---------- */
+.q-wrap{display:flex;flex-direction:column;gap:6px}
+.qrow{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 11px;border-radius:var(--r-s);
+  background:#fbfcfe;border:1px solid var(--line2);
+  transition:all .13s ease;
+}
+.qrow:hover{background:#f6f9fd;border-color:#dfe6f0}
+.qrow.dragging{opacity:.4}
+.qrow.over{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-soft)}
+.qrow.done{background:var(--ok-soft);border-color:#d3edde}
+.qrow.fail{background:var(--err-soft);border-color:#f5d4d5}
+.handle{
+  cursor:grab;color:#c3cbd6;flex-shrink:0;line-height:0;padding:2px;
+}
+.handle:active{cursor:grabbing}
+.handle svg{width:14px;height:14px}
+.q-ico{
+  width:26px;height:26px;border-radius:7px;flex-shrink:0;
+  background:#eaeff7;display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:700;color:#6b7889;letter-spacing:-.3px;
+}
+.qrow.done .q-ico{background:#d5f0e0;color:#0d7d3f}
+.qrow.fail .q-ico{background:#fadcdd;color:#b62b30}
+.q-main{min-width:0;flex:1}
+.q-name{
+  font-size:12.5px;font-weight:500;color:var(--ink);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.q-sub{font-size:11px;color:var(--ink3);margin-top:1px;display:flex;gap:8px;align-items:center}
+.q-sub .sep{color:#d3dae4}
+.q-tag{
+  font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;
+  background:var(--brand-soft);color:var(--brand-d);letter-spacing:.2px;
+}
+.q-tag.ok{background:#d5f0e0;color:#0d7d3f}
+.q-tag.bad{background:#fadcdd;color:#b62b30}
+.q-tag.run{background:#fff2d9;color:#96650a}
+.q-x{
+  border:none;background:transparent;color:#c3cbd6;padding:4px;border-radius:6px;
+  line-height:0;flex-shrink:0;
+}
+.q-x:hover{background:#f1e9e9;color:var(--err)}
+.q-x svg{width:13px;height:13px;margin:0}
+.q-prog{height:3px;background:#e8edf4;border-radius:2px;overflow:hidden;margin-top:5px}
+.q-prog i{display:block;height:100%;background:linear-gradient(90deg,#5b85f8,#3b6ef5);
+  border-radius:2px;transition:width .3s ease}
+
+/* ---------- 空态 ---------- */
+.empty{
+  text-align:center;padding:32px 20px;color:var(--ink3);
+}
+.empty svg{width:34px;height:34px;color:#ccd5e2;margin-bottom:9px}
+.empty p{font-size:12.5px}
+.empty .sub{font-size:11.5px;color:#a8b1bd;margin-top:3px}
+
+/* ---------- 设置面板 ---------- */
+.set{display:flex;flex-direction:column;gap:9px}
+.grp{}
+.grp-t{
+  font-size:10.5px;font-weight:700;color:var(--ink3);letter-spacing:.06em;
+  text-transform:uppercase;margin-bottom:5px;display:flex;align-items:center;gap:7px;
+}
+.grp-t::after{content:'';flex:1;height:1px;background:var(--line2)}
+.row{display:flex;align-items:center;gap:9px;padding:2px 0;min-height:25px}
+.row-l{font-size:12.5px;color:var(--ink2);flex-shrink:0;width:80px}
+.row-c{flex:1;display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.sw-l{font-size:12px;line-height:1.35}
+
+select,input[type=text],input[type=number]{
+  font-family:inherit;font-size:12.5px;color:var(--ink);
+  border:1px solid var(--line);background:#fff;border-radius:8px;
+  padding:5px 9px;outline:none;transition:all .13s;
+}
+select{cursor:pointer;padding-right:6px;flex:1;min-width:0;max-width:100%}
+select:hover,input:hover{border-color:#ccd5e2}
+select:focus,input:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+input[type=number]{width:76px}
+
+/* 开关 */
+.sw{position:relative;width:36px;height:20px;flex-shrink:0;cursor:pointer}
+.sw input{opacity:0;width:0;height:0}
+.sw span{
+  position:absolute;inset:0;background:#d6dde7;border-radius:11px;
+  transition:.2s;display:block;
+}
+.sw span::before{
+  content:'';position:absolute;width:16px;height:16px;left:2px;top:2px;
+  background:#fff;border-radius:50%;transition:.2s;
+  box-shadow:0 1px 3px rgba(0,0,0,.18);
+}
+.sw input:checked + span{background:var(--brand)}
+.sw input:checked + span::before{transform:translateX(16px)}
+.sw-l{font-size:12.5px;color:var(--ink);cursor:pointer}
+
+/* 分段选择 */
+.seg{display:inline-flex;background:#eef1f6;border-radius:9px;padding:2px;gap:2px}
+.seg button{
+  border:none;background:transparent;padding:4px 11px;border-radius:7px;
+  font-size:12px;color:var(--ink3);font-weight:500;
+}
+.seg button:hover{background:rgba(255,255,255,.7);color:var(--ink2)}
+.seg button.on{background:#fff;color:var(--ink);font-weight:600;box-shadow:0 1px 3px rgba(20,30,60,.09)}
+
+/* ---- 大模型配置 ---- */
+.mini{
+  font-family:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap;
+  border:1px solid var(--line);background:#fff;color:var(--ink2);
+  border-radius:7px;padding:4px 9px;transition:all .13s;
+}
+.mini:hover{background:#f7f9fc;border-color:#d3dae4;color:var(--ink)}
+.mini:disabled{opacity:.5;cursor:not-allowed}
+.mini.primary{background:var(--brand);color:#fff;border-color:transparent;font-weight:600}
+.mini.primary:hover{background:var(--brand-d);color:#fff}
+.llm-note{font-size:11px;color:var(--ink3);margin-left:0;flex-basis:100%;margin-top:3px}
+.llm-status{font-size:11.5px;margin-left:9px;line-height:1.5}
+.llm-status.ok{color:var(--ok)}
+.llm-status.err{color:var(--err)}
+.llm-status.warn{color:var(--warn)}
+.llm-status .k{font-family:var(--mono);font-size:10.5px;color:var(--ink3)}
+
+
+/* 标签多选 */
+.chips{display:flex;gap:5px;flex-wrap:wrap}
+.chip{
+  border:1px solid var(--line);background:#fff;border-radius:7px;
+  padding:3px 9px;font-size:11.5px;color:var(--ink3);cursor:pointer;
+  transition:all .12s;font-weight:500;
+}
+.chip:hover{border-color:#ccd5e2;color:var(--ink2)}
+.chip.on{background:var(--brand-soft);border-color:#bcd0fb;color:var(--brand-d);font-weight:600}
+
+/* ---------- 底栏 ---------- */
+.bottom{
+  background:var(--card);border-radius:var(--r) var(--r) 0 0;
+  box-shadow:0 -2px 14px rgba(20,30,60,.07);
+  padding:11px 16px 13px;flex-shrink:0;
+}
+.bar{height:5px;background:#e8edf4;border-radius:3px;overflow:hidden;margin-bottom:10px}
+.bar i{
+  display:block;height:100%;width:0;border-radius:3px;
+  background:linear-gradient(90deg,#5b85f8,#3b6ef5);
+  transition:width .35s cubic-bezier(.4,0,.2,1);
+}
+.bar.idle i{background:#dfe5ee}
+.bar.done i{background:linear-gradient(90deg,#22c06a,#12a150)}
+.bar.err i{background:linear-gradient(90deg,#f2696d,#e0393e)}
+/* "在处理但无细粒度进度"状态：条纹流动动画，一眼看出程序没卡死 */
+.bar.busy i{
+  width:100% !important;
+  background:repeating-linear-gradient(
+    -45deg,
+    #93b4fa 0px, #93b4fa 12px,
+    #5b85f8 12px, #5b85f8 24px
+  );
+  background-size:34px 100%;
+  animation:barflow .8s linear infinite;
+}
+@keyframes barflow{from{background-position:0 0}to{background-position:34px 0}}
+.bar.busy::after{
+  content:'';position:absolute;
+}
+.b-line{display:flex;align-items:center;gap:12px}
+.b-stat{font-size:12.5px;color:var(--ink2);display:flex;align-items:center;gap:8px;min-width:0}
+.b-stat b{color:var(--ink);font-weight:600}
+.b-time{font-family:var(--mono);font-size:11.5px;color:var(--ink3)}
+.b-act{margin-left:auto;display:flex;gap:8px;align-items:center}
+
+/* ---------- 预览弹层 ---------- */
+.mask{
+  position:fixed;inset:0;background:rgba(18,24,38,.42);backdrop-filter:blur(3px);
+  display:none;align-items:center;justify-content:center;z-index:100;padding:28px;
+}
+.mask.on{display:flex}
+.modal{
+  background:#fff;border-radius:16px;width:100%;max-width:880px;max-height:100%;
+  display:flex;flex-direction:column;overflow:hidden;
+  box-shadow:0 20px 60px rgba(10,18,40,.3);
+}
+.modal-hd{
+  padding:16px 20px;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:10px;flex-shrink:0;
+}
+.modal-hd h3{font-size:14.5px;font-weight:700}
+.modal-bd{padding:6px 20px 18px;overflow:auto;flex:1}
+.modal-ft{padding:12px 20px;border-top:1px solid var(--line);display:flex;
+  gap:8px;justify-content:flex-end;flex-shrink:0;background:#fbfcfe}
+
+.cue{display:flex;gap:14px;padding:10px 0;border-bottom:1px solid var(--line2)}
+.cue:last-child{border-bottom:none}
+.cue-n{
+  font-family:var(--mono);font-size:11px;color:var(--ink3);
+  width:34px;text-align:right;flex-shrink:0;padding-top:2px;
+}
+.cue-t{font-family:var(--mono);font-size:11px;color:var(--ink3);
+  width:132px;flex-shrink:0;padding-top:2px}
+.cue-x{flex:1;min-width:0}
+.cue-src{font-size:13px;color:var(--ink);line-height:1.65}
+.cue-tr{font-size:12.5px;color:var(--brand-d);line-height:1.65;margin-top:3px}
+
+/* ---------- Toast ---------- */
+#toasts{position:fixed;bottom:96px;right:24px;display:flex;flex-direction:column;
+  gap:8px;z-index:200;pointer-events:none}
+.toast{
+  background:#232b38;color:#fff;border-radius:10px;padding:9px 15px;
+  font-size:12.5px;box-shadow:0 8px 24px rgba(10,18,40,.28);
+  animation:tin .24s cubic-bezier(.2,.9,.3,1.2);max-width:340px;
+  display:flex;align-items:center;gap:8px;
+}
+.toast.ok{background:#0f8f49}
+.toast.err{background:#cb2f34}
+.toast svg{width:14px;height:14px;flex-shrink:0}
+@keyframes tin{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+
+/* 隐藏文件输入 */
+#fpick{display:none}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 顶栏 -->
+  <div class="top">
+    <div class="logo">sB</div>
+    <div>
+      <div class="brand">字幕生成<small>本地运行 · 文件不上传</small></div>
+    </div>
+    <div class="top-right">
+      <div class="hint" id="envHint"><span class="dot" id="envDot"></span><span id="envTxt">检测环境…</span></div>
+      <button class="ghost icon-only" id="btnToggleLog" title="显示/隐藏处理日志"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
+      <button class="ghost icon-only" id="btnSettings" title="设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10.09 3V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- 左：队列 -->
+    <div class="card" style="flex:1.62;min-width:0">
+      <div class="card-hd">
+        <h3>队列</h3>
+        <span class="cnt" id="qCnt">还没有文件</span>
+        <div class="sp"></div>
+        <button id="btnAdd">+ 添加文件</button>
+        <button id="btnAddDir">添加文件夹</button>
+        <button class="ghost icon-only" id="btnClear" title="清空队列"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6"/></svg></button>
+      </div>
+      <div class="card-bd" style="display:flex;flex-direction:column;gap:10px">
+
+        <div class="drop" id="drop">
+          <div class="drop-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4m0 0L8 8m4-4 4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></div>
+          <div class="drop-t">拖进来，或点击选择文件</div>
+          <div class="drop-s">mp4 · mkv · mov · mp3 · wav · m4a 等</div>
+        </div>
+
+        <div class="q-wrap" id="qList" style="flex:1;overflow:auto;min-height:0"></div>
+      </div>
+    </div>
+
+    <!-- 右：设置 -->
+    <div class="card" style="flex:1;min-width:300px;max-width:400px">
+      <div class="card-hd">
+        <h3>设置</h3>
+        <span class="cnt">已自动记住</span>
+        <div class="sp"></div>
+        <button class="ghost" id="btnResetSet">恢复默认</button>
+      </div>
+      <div class="card-bd">
+        <div class="set">
+
+          <div class="grp">
+            <div class="grp-t">识别</div>
+            <div class="row">
+              <div class="row-l">模型</div>
+              <div class="row-c"><select id="sModel">
+                <option value="turbo">turbo · 推荐</option>
+                <option value="large">large · 最准</option>
+                <option value="medium">medium · 均衡</option>
+                <option value="small">small · 最快</option>
+              </select></div>
+            </div>
+            <div class="row">
+              <div class="row-l">语言</div>
+              <div class="row-c"><select id="sLang">
+                <option value="">自动检测</option>
+                <option value="zh" selected>中文</option>
+                <option value="en">英文</option>
+                <option value="ja">日文</option>
+                <option value="ko">韩文</option>
+              </select></div>
+            </div>
+            <div class="row">
+              <div class="row-l">降噪</div>
+              <div class="row-c">
+                <label class="sw"><input type="checkbox" id="sDenoise"><span></span></label>
+                <span class="sw-l">录音底噪重时开启</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="grp">
+            <div class="grp-t">识别纠错</div>
+            <div class="row">
+              <div class="row-l">转简体</div>
+              <div class="row-c">
+                <label class="sw"><input type="checkbox" id="sSimplify" checked><span></span></label>
+                <span class="sw-l">繁体自动转简体</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row-l">提示词</div>
+              <div class="row-c" style="flex-wrap:nowrap">
+                <input type="text" id="sPrompt" placeholder="人名、专有名词，改善识别" style="flex:1;min-width:0;font-size:12px">
+              </div>
+            </div>
+            <div class="row" style="align-items:flex-start">
+              <div class="row-l" style="padding-top:5px">纠错表</div>
+              <div class="row-c" style="flex-wrap:nowrap">
+                <textarea id="sFixups" rows="2"
+                  placeholder="错误词=正确词（每行一条）&#10;例：妙翠脚=妙脆角"
+                  style="flex:1;min-width:0;font-size:12px;font-family:var(--mono);resize:vertical;
+                         border:1px solid var(--line);border-radius:8px;padding:5px 9px;outline:none;color:var(--ink)"></textarea>
+              </div>
+            </div>
+            <div class="row" style="padding-top:0">
+              <div class="row-l"></div>
+              <div class="row-c">
+                <span style="font-size:11px;color:var(--ink3);line-height:1.5">
+                  提示词与纠错表都能改善同音字/专有名词错误。<br>
+                  术语表的原词也会自动参与识别。
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="grp">
+            <div class="grp-t">翻译</div>
+            <div class="row">
+              <div class="row-l">生成译文</div>
+              <div class="row-c">
+                <label class="sw"><input type="checkbox" id="sTr" checked><span></span></label>
+                <span class="sw-l">翻成其他语言</span>
+              </div>
+            </div>
+            <div class="row" id="rowTgt">
+              <div class="row-l">目标语言</div>
+              <div class="row-c"><select id="sTgt">
+                <option value="en" selected>英文</option>
+                <option value="ja">日文</option>
+                <option value="ko">韩文</option>
+                <option value="fr">法文</option>
+                <option value="de">德文</option>
+                <option value="es">西班牙文</option>
+                <option value="ru">俄文</option>
+              </select></div>
+            </div>
+            <div class="row" id="rowBi">
+              <div class="row-l">双语字幕</div>
+              <div class="row-c">
+                <label class="sw"><input type="checkbox" id="sBi"><span></span></label>
+                <span class="sw-l">原文+译文同屏</span>
+              </div>
+            </div>
+            <div class="row" id="rowBe">
+              <div class="row-l">翻译引擎</div>
+              <div class="row-c">
+                <div class="seg" id="segBackend">
+                  <button data-v="auto" class="on">自动</button>
+                  <button data-v="offline">离线</button>
+                  <button data-v="llm">大模型</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 大模型配置 -->
+            <div class="row" id="rowApi" style="display:none">
+              <div class="row-l">服务商</div>
+              <div class="row-c">
+                <select id="sProvider" style="width:210px;flex:0 0 auto"></select>
+                <span class="llm-note" id="providerNote"></span>
+              </div>
+            </div>
+            <div class="row" id="rowApiKey" style="display:none">
+              <div class="row-l">API Key</div>
+              <div class="row-c">
+                <input type="password" id="sApiKey" placeholder="sk-…" style="flex:1">
+                <button class="mini" id="btnToggleKey" title="显示/隐藏">👁</button>
+                <button class="mini" id="btnGetKey" style="display:none">去申请</button>
+              </div>
+            </div>
+            <div class="row" id="rowApiModel" style="display:none">
+              <div class="row-l">模型</div>
+              <div class="row-c">
+                <input type="text" id="sLlmModel" placeholder="deepseek-chat" style="flex:1">
+              </div>
+            </div>
+            <div class="row" id="rowApiBase" style="display:none">
+              <div class="row-l">接口地址</div>
+              <div class="row-c">
+                <input type="text" id="sApiBase" placeholder="https://api.deepseek.com/v1"
+                       style="flex:1;font-size:12px;font-family:var(--mono)">
+              </div>
+            </div>
+            <div class="row" id="rowApiTest" style="display:none">
+              <div class="row-l"></div>
+              <div class="row-c">
+                <button class="mini primary" id="btnTestLlm">测试连接</button>
+                <span class="llm-status" id="llmStatus"></span>
+              </div>
+            </div>
+            <div class="row" id="rowApiEnv" style="display:none">
+              <div class="row-l"></div>
+              <div class="row-c">
+                <span class="llm-note" id="envNote"></span>
+              </div>
+            </div>
+            <div class="row" id="rowGloss">
+              <div class="row-l">术语表</div>
+              <div class="row-c" style="flex-wrap:nowrap">
+                <input type="text" id="sGloss" placeholder="男主=the male lead; 女主=the female lead"
+                       style="flex:1;min-width:0;font-size:12px" title="每行一条，格式：原词=译词">
+              </div>
+            </div>
+          </div>
+
+          <div class="grp">
+            <div class="grp-t">输出</div>
+            <div class="row">
+              <div class="row-l">格式</div>
+              <div class="row-c"><div class="chips" id="chipsFmt">
+                <span class="chip on" data-v="srt">SRT</span>
+                <span class="chip" data-v="vtt">VTT</span>
+                <span class="chip" data-v="ass">ASS</span>
+                <span class="chip" data-v="txt">TXT</span>
+              </div></div>
+            </div>
+            <div class="row">
+              <div class="row-l">保存到</div>
+              <div class="row-c">
+                <input type="text" id="sOut" placeholder="默认：与视频同目录" style="flex:1;min-width:0">
+                <button class="icon-only" id="btnPickOut" title="选择目录"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="grp">
+            <div class="grp-t">成片</div>
+            <div class="row">
+              <div class="row-l">烧录字幕</div>
+              <div class="row-c">
+                <label class="sw"><input type="checkbox" id="sBurn"><span></span></label>
+                <span class="sw-l">字幕压进画面<br><small style="color:var(--ink3)">发抖音/视频号用，有双语则烧双语</small></span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row-l">多轨封装</div>
+              <div class="row-c">
+                <label class="sw"><input type="checkbox" id="sMux"><span></span></label>
+                <span class="sw-l">各语言一条轨，播放器可切换<br><small style="color:var(--ink3)">输出 MKV，画质无损</small></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="grp">
+            <div class="grp-t">原字幕处理</div>
+            <div class="row">
+              <div class="row-l">去除原字幕</div>
+              <div class="row-c">
+                <label class="sw"><input type="checkbox" id="sDesub"><span></span></label>
+                <span class="sw-l">遮盖视频里已烧录的字幕<br>
+                  <small style="color:var(--ink3)">避免新老字幕重叠</small></span>
+              </div>
+            </div>
+            <div class="row" id="rowDesubOpt" style="display:none">
+              <div class="row-l">位置</div>
+              <div class="row-c">
+                <div class="seg" id="segDesubPos">
+                  <button data-v="auto" class="on">自动检测</button>
+                  <button data-v="bottom">底部预设</button>
+                  <button data-v="manual">手动指定</button>
+                </div>
+              </div>
+            </div>
+            <div class="row" id="rowDesubManual" style="display:none">
+              <div class="row-l">区域</div>
+              <div class="row-c">
+                <input type="text" id="sDesubRegion" placeholder="x,y,w,h 例如 14,874,691,68"
+                       style="flex:1;min-width:0;font-family:var(--mono);font-size:11.5px">
+                <button id="btnDetectRegion" title="自动检测并填入">检测</button>
+              </div>
+            </div>
+            <div class="row" id="rowDesubMethod" style="display:none">
+              <div class="row-l">遮盖方式</div>
+              <div class="row-c">
+                <select id="sDesubMethod">
+                  <option value="blur" selected>模糊（推荐，最自然）</option>
+                  <option value="pixelate">马赛克（最彻底）</option>
+                </select>
+              </div>
+            </div>
+            <div class="row" id="rowDesubOnly" style="display:none">
+              <div class="row-l">输出方式</div>
+              <div class="row-c">
+                <label class="sw"><input type="checkbox" id="sDesubOnly"><span></span></label>
+                <span class="sw-l">只输出干净视频（不生成字幕）<br>
+                  <small style="color:var(--ink3)">配合 srt 软字幕使用，画质无损</small></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="grp">
+            <div class="grp-t">排版</div>
+            <div class="row">
+              <div class="row-l">每行字数</div>
+              <div class="row-c">
+                <input type="number" id="sChars" value="21" min="6" max="40">
+                <span style="font-size:11.5px;color:var(--ink3)">汉字，超出自动折行</span>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row-l">单条时长</div>
+              <div class="row-c">
+                <input type="number" id="sDur" value="7" min="1" max="20" step="0.5">
+                <span style="font-size:11.5px;color:var(--ink3)">秒，超出强制断开</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="grp">
+            <div class="grp-t">高级</div>
+            <div class="row">
+              <div class="row-l">模型精度</div>
+              <div class="row-c"><select id="sCompute">
+                <option value="auto" selected>自动（按显卡架构）</option>
+                <option value="float32">float32</option>
+                <option value="float16">float16</option>
+                <option value="int8">int8</option>
+              </select></div>
+            </div>
+            <div class="row">
+              <div class="row-l">推理设备</div>
+              <div class="row-c"><select id="sDevice">
+                <option value="auto" selected>自动</option>
+                <option value="cuda">GPU</option>
+                <option value="cpu">CPU</option>
+              </select></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- 右：处理日志 -->
+    <div class="card" id="logCard" style="flex:0 0 330px;min-width:0">
+      <div class="card-hd">
+        <h3>处理日志</h3>
+        <span class="cnt" id="logCnt">暂无</span>
+        <div class="sp"></div>
+        <label class="sw" style="width:30px;height:17px" title="自动滚动到底部">
+          <input type="checkbox" id="logAuto" checked><span></span>
+        </label>
+        <button class="ghost icon-only" id="btnLogCopy" title="复制全部日志"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg></button>
+        <button class="ghost icon-only" id="btnLogClear" title="清空日志"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="card-bd" style="padding:0 12px 12px">
+        <div class="logbox" id="logBox"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底栏 -->
+  <div class="bottom">
+    <div class="bar idle" id="bar"><i id="barI"></i></div>
+    <div class="b-line">
+      <div class="b-stat">
+        <span id="stText">准备就绪</span>
+        <span class="b-time" id="stTime"></span>
+      </div>
+      <div class="b-act">
+        <button id="btnOpenOut" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>打开输出目录
+        </button>
+        <button id="btnPreview" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>预览字幕
+        </button>
+        <button id="btnReview">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>校对字幕
+        </button>
+        <button id="btnCancel" class="danger" style="display:none">停止</button>
+        <button id="btnRun" class="primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-14 9V3z"/></svg>开始生成
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 预览弹层 -->
+<div class="mask" id="mask">
+  <div class="modal">
+    <div class="modal-hd">
+      <h3 id="pvTitle">字幕预览</h3>
+      <div class="sp" style="margin-left:auto"></div>
+      <button class="ghost icon-only" id="btnPvClose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="modal-bd" id="pvBody"></div>
+    <div class="modal-ft">
+      <button id="btnPvOpen">打开文件所在目录</button>
+      <button class="primary" id="btnPvOk">知道了</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+<input type="file" id="fpick" multiple accept="video/*,audio/*">
+
+<script>
+/* ============================================================
+   subgen GUI —— 前端逻辑
+   与 Python 的通信走 window.pywebview.api.*
+   ============================================================ */
+
+const $  = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+const VIDEO_EXT = ['.mp4','.mkv','.mov','.avi','.flv','.wmv','.webm','.m4v','.ts','.mpg','.mpeg','.3gp','.rmvb'];
+const AUDIO_EXT = ['.mp3','.wav','.m4a','.aac','.flac','.ogg','.opus','.wma','.aiff','.amr'];
+const ALL_EXT = VIDEO_EXT.concat(AUDIO_EXT);
+
+// ---------- 状态 ----------
+let LLM_PROVIDERS = [];   // 服务商预设，启动时从后端取
+
+const S = {
+  queue: [],          // {path,name,ext,size,duration,status,progress,msg}
+  running: false,
+  outputs: [],        // 最近一次产出的文件路径
+  preview: [],        // 最近一次的字幕预览
+  outDir: '',
+  settings: {},       // 持久化设置
+};
+
+let seq = 0;          // 拖拽排序用的稳定 id
+
+// ---------- 处理日志 ----------
+const LOG_MAX = 2000;          // 上限，避免长时间运行后内存膨胀
+const logState = { items: [] };
+
+// 日志面板很窄，长文件名/长路径会把每一行都折成好几行，反而看不清。
+// 做法：
+//   - 文件名去掉扩展名和常见的编码后缀（_HEVC-CRF30 之类），超长则中间省略
+//   - 路径只留最后两级目录，前面用 …
+function shortName(name) {
+  let s = String(name || '').replace(/\.[^.]+$/, '');      // 去扩展名
+  s = s.replace(/[_\-\s]*\b(HEVC|H264|H265|AVC|x264|x265|CRF\d+|AAC|MP3)\b.*$/i, '');
+  s = s.replace(/[_\-\s]+$/, '');
+  if (s.length <= 22) return s;
+  return s.slice(0, 11) + '…' + s.slice(-8);
+}
+
+function shortPath(p) {
+  const s = String(p || '').replace(/\\/g, '/');
+  const parts = s.split('/').filter(Boolean);
+  if (parts.length <= 2) return s;
+  return '…/' + parts.slice(-2).join('/');
+}
+
+function logLine(msg, level='info', title='') {
+  const box = $('#logBox');
+  if (!box) return;
+  const empty = box.querySelector('.lg-empty');
+  if (empty) empty.remove();
+
+  const t = new Date();
+  const ts = String(t.getHours()).padStart(2,'0') + ':' +
+             String(t.getMinutes()).padStart(2,'0') + ':' +
+             String(t.getSeconds()).padStart(2,'0');
+
+  const el = document.createElement('div');
+  el.className = 'lg ' + level;
+  // 完整信息（如产出文件全路径）挂在 title 上：日志里显示短名保持整齐，
+  // 需要精确路径时鼠标悬停即可看到，不用让长路径把每一行都撑开。
+  if (title) el.title = title;
+
+  // 路径类信息在分隔符后插入零宽空格，让它换行时断在目录边界而不是词中间
+  const isPath = /^[\s]*[→x×]?\s*[A-Za-z]:[\\/]|^[\s]*[→]/.test(msg) || msg.includes(':\\');
+  let shown = escapeHtml(msg);
+  if (isPath) {
+    shown = shown.replace(/([\\/])/g, '$1\u200b');
+  }
+  el.innerHTML = `<span class="t">${ts}</span><span class="m${isPath?' brk':''}">${shown}</span>`;
+  box.appendChild(el);
+
+  logState.items.push({ ts, msg, level });
+  if (logState.items.length > LOG_MAX) {
+    logState.items.splice(0, logState.items.length - LOG_MAX);
+    const first = box.querySelector('.lg');
+    if (first) first.remove();
+  }
+
+  // 数量提示：分别统计错误与警告
+  const errs = logState.items.filter(x => x.level === 'err').length;
+  const warns = logState.items.filter(x => x.level === 'warn').length;
+  let label = logState.items.length + ' 条';
+  if (errs) label += ` · ${errs} 错误`;
+  else if (warns) label += ` · ${warns} 警告`;
+  $('#logCnt').textContent = label;
+
+  if ($('#logAuto').checked) box.scrollTop = box.scrollHeight;
+}
+
+function clearLog() {
+  const box = $('#logBox');
+  box.innerHTML = '<div class="lg-empty">尚未开始处理<br>点击右下角「开始生成」后，这里会显示详细过程</div>';
+  logState.items = [];
+  $('#logCnt').textContent = '暂无';
+}
+
+async function copyLog() {
+  if (!logState.items.length) { toast('还没有日志', 'err'); return; }
+  const txt = logState.items.map(x => `[${x.ts}] ${x.msg}`).join('\n');
+  try {
+    await navigator.clipboard.writeText(txt);
+    toast('日志已复制到剪贴板', 'ok');
+  } catch (e) {
+    // 剪贴板 API 在 webview 里可能不可用，回退到手动选中
+    const ta = document.createElement('textarea');
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast('日志已复制', 'ok'); }
+    catch (e2) { toast('复制失败，请手动选中', 'err'); }
+    ta.remove();
+  }
+}
+
+function initLog() {
+  clearLog();
+  $('#btnLogClear').onclick = clearLog;
+  $('#btnLogCopy').onclick = copyLog;
+  $('#btnToggleLog').onclick = () => toggleLog();
+}
+
+function toggleLog(force) {
+  const card = $('#logCard');
+  const hidden = force === undefined ? card.style.display !== 'none' : !force;
+  card.style.display = hidden ? 'none' : '';
+  const btn = $('#btnToggleLog');
+  btn.style.color = hidden ? 'var(--ink3)' : 'var(--brand)';
+  btn.title = hidden ? '显示处理日志' : '隐藏处理日志';
+  try { localStorage.setItem('subgen_log_hidden', hidden ? '1' : '0'); } catch (e) {}
+}
+
+// ---------- 提示 ----------
+function toast(msg, kind='') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + kind;
+  const ico = kind==='ok'
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>'
+    : kind==='err'
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6L6 18M6 6l12 12"/></svg>'
+    : '';
+  el.innerHTML = ico + '<span>' + msg + '</span>';
+  $('#toasts').appendChild(el);
+  setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .25s';
+                     setTimeout(()=>el.remove(), 250); }, kind==='err'?4200:2600);
+}
+
+// ---------- 工具 ----------
+const fmtSize = (b) => {
+  if (!b) return '';
+  if (b < 1024*1024) return (b/1024).toFixed(0)+' KB';
+  if (b < 1024**3)   return (b/1024/1024).toFixed(1)+' MB';
+  return (b/1024**3).toFixed(2)+' GB';
+};
+const fmtDur = (s) => {
+  if (!s) return '';
+  s = Math.round(s);
+  const m = Math.floor(s/60), r = s%60;
+  return String(m).padStart(2,'0')+':'+String(r).padStart(2,'0');
+};
+const fmtClock = (s) => {
+  s = Math.max(0, Math.round(s));
+  const m = Math.floor(s/60), r = s%60;
+  return m+':'+String(r).padStart(2,'0');
+};
+const baseName = (p) => p.replace(/\\/g,'/').split('/').pop();
+const extOf = (p) => { const m = p.match(/\.[^.\\/]+$/); return m ? m[0].toLowerCase() : ''; };
+const isMedia = (p) => ALL_EXT.includes(extOf(p));
+
+// ---------- 队列渲染 ----------
+function renderQueue() {
+  const box = $('#qList');
+  if (!S.queue.length) {
+    box.innerHTML = `<div class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 4v16"/></svg>
+      <p>队列是空的</p><div class="sub">拖入视频文件，或点上方按钮添加</div></div>`;
+    $('#qCnt').textContent = '还没有文件';
+    updateRunBtn();
+    return;
+  }
+  const totalDur = S.queue.reduce((a,f)=>a+(f.duration||0),0);
+  $('#qCnt').textContent = S.queue.length + ' 个文件' + (totalDur? ' · 共 '+fmtClock(totalDur) : '');
+
+  box.innerHTML = S.queue.map((f) => {
+    const st = f.status || 'idle';
+    const cls = st==='done' ? 'done' : (st==='fail' ? 'fail' : '');
+    const tagCls = st==='done' ? 'ok' : (st==='fail' ? 'bad' : (st==='run' ? 'run' : ''));
+    let label = {idle:'待处理', run:f.msg||'处理中', done:'✓ 已完成', fail:'✗ 失败', skip:'已跳过'}[st] || '待处理';
+    const prog = (st==='run' && f.progress!=null)
+      ? `<div class="q-prog"><i style="width:${Math.round(f.progress*100)}%"></i></div>` : '';
+    const dur = f.duration ? `<span class="sep">·</span>${fmtDur(f.duration)}` : '';
+    const sz  = f.size ? `<span class="sep">·</span>${fmtSize(f.size)}` : '';
+    const err = st==='fail' && f.errorMsg
+      ? `<div class="q-sub" style="color:var(--err);margin-top:3px">${escapeHtml(f.errorMsg)}</div>` : '';
+    return `<div class="qrow ${cls}" draggable="${!S.running}" data-id="${f.id}">
+      <div class="handle"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/></svg></div>
+      <div class="q-ico">${(f.ext||'').replace('.','').toUpperCase().slice(0,4)||'?'}</div>
+      <div class="q-main">
+        <div class="q-name" title="${escapeHtml(f.path)}">${escapeHtml(f.name)}</div>
+        <div class="q-sub">${tagCls?`<span class="q-tag ${tagCls}">${label}</span>`:label}${dur}${sz}</div>
+        ${err}${prog}
+      </div>
+      <button class="q-x" data-del="${f.id}" title="移除" ${st==='run'?'disabled':''}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button></div>`;
+  }).join('');
+
+  bindQueueEvents();
+  updateRunBtn();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function bindQueueEvents() {
+  // 删除
+  $$('#qList [data-del]').forEach(b => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      const id = +b.dataset.del;
+      S.queue = S.queue.filter(f => f.id !== id);
+      renderQueue();
+    };
+  });
+  // 拖拽排序
+  let dragId = null;
+  $$('#qList .qrow').forEach(row => {
+    row.ondragstart = (e) => {
+      if (S.running) return e.preventDefault();
+      dragId = +row.dataset.id;
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    };
+    row.ondragend = () => { row.classList.remove('dragging'); $$('#qList .qrow').forEach(r=>r.classList.remove('over')); };
+    row.ondragover = (e) => {
+      if (dragId == null) return;
+      e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+      row.classList.add('over');
+    };
+    row.ondragleave = () => row.classList.remove('over');
+    row.ondrop = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      row.classList.remove('over');
+      const to = +row.dataset.id;
+      if (dragId == null || dragId === to) return;
+      const from = S.queue.findIndex(f => f.id === dragId);
+      const idx  = S.queue.findIndex(f => f.id === to);
+      if (from < 0 || idx < 0) return;
+      const [item] = S.queue.splice(from, 1);
+      S.queue.splice(idx, 0, item);
+      dragId = null;
+      renderQueue();
+    };
+  });
+  // 双击预览该文件
+  $$('#qList .qrow').forEach(row => {
+    row.ondblclick = () => {
+      const f = S.queue.find(x => x.id === +row.dataset.id);
+      if (f && f.status === 'done') showPreview(f);
+    };
+  });
+}
+
+function updateRunBtn() {
+  const has = S.queue.some(f => f.status !== 'done' && f.status !== 'fail');
+  $('#btnRun').disabled = S.running || !has;
+}
+
+// ---------- 添加文件 ----------
+async function addPaths(paths) {
+  const valid = paths.filter(isMedia);
+  const skipped = paths.length - valid.length;
+  if (!valid.length) {
+    toast(skipped ? `跳过了 ${skipped} 个不支持的文件` : '没有可添加的文件', 'err');
+    return;
+  }
+  // 去重
+  const exist = new Set(S.queue.map(f => f.path.toLowerCase()));
+  const fresh = valid.filter(p => !exist.has(p.toLowerCase()));
+  const dup = valid.length - fresh.length;
+
+  for (const p of fresh) {
+    S.queue.push({
+      id: ++seq, path: p, name: baseName(p), ext: extOf(p),
+      size: 0, duration: 0, status: 'idle', progress: null, msg: '',
+    });
+  }
+  renderQueue();
+
+  let msg = `已添加 ${fresh.length} 个文件`;
+  if (dup) msg += `，跳过 ${dup} 个重复`;
+  if (skipped) msg += `，忽略 ${skipped} 个不支持`;
+  toast(msg, 'ok');
+
+  // 后台探测时长与大小（不阻塞界面）
+  try {
+    const info = await window.pywebview.api.probe(fresh);
+    (info || []).forEach(it => {
+      const f = S.queue.find(x => x.path === it.path);
+      if (f) { f.duration = it.duration || 0; f.size = it.size || 0; }
+    });
+    renderQueue();
+  } catch (e) { /* 探测失败不影响使用 */ }
+}
+
+// ---------- 拖放 ----------
+function initDrop() {
+  const drop = $('#drop');
+  const stop = (e) => { e.preventDefault(); e.stopPropagation(); };
+  ['dragenter','dragover'].forEach(ev => {
+    drop.addEventListener(ev, (e) => { stop(e); drop.classList.add('on'); });
+  });
+  ['dragleave','drop'].forEach(ev => {
+    drop.addEventListener(ev, (e) => {
+      stop(e);
+      if (ev === 'dragleave' && drop.contains(e.relatedTarget)) return;
+      drop.classList.remove('on');
+    });
+  });
+  drop.addEventListener('drop', async (e) => {
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length) {
+      // pywebview 下拿不到完整路径，改用 Python 侧解析文件名
+      const names = files.map(f => f.name);
+      const got = await window.pywebview.api.resolve_dropped(names);
+      if (got && got.paths && got.paths.length) addPaths(got.paths);
+      else if (got && got.need_dialog) {
+        toast('浏览器外壳拿不到拖入路径，请用「添加文件」按钮', 'err');
+      } else addPaths([]);
+    }
+  });
+
+  // 整页也接受拖放
+  document.addEventListener('dragover', stop);
+  document.addEventListener('drop', (e) => {
+    stop(e);
+    drop.dispatchEvent(new DragEvent('drop', { dataTransfer: e.dataTransfer }));
+  });
+
+  drop.onclick = () => pickFiles();
+  $('#btnAdd').onclick = () => pickFiles();
+  $('#btnAddDir').onclick = () => pickDir();
+}
+
+async function pickFiles() {
+  try {
+    const r = await window.pywebview.api.pick_files();
+    if (r && r.length) addPaths(r);
+  } catch (e) { toast('打开文件对话框失败：' + e, 'err'); }
+}
+
+async function pickDir() {
+  try {
+    const r = await window.pywebview.api.pick_folder();
+    if (r) {
+      const files = await window.pywebview.api.list_media(r);
+      if (files && files.length) addPaths(files);
+      else toast('该目录下没有找到媒体文件', 'err');
+    }
+  } catch (e) { toast('选择目录失败：' + e, 'err'); }
+}
+
+// ---------- 设置读写 ----------
+const SET_KEYS = ['sModel','sLang','sDenoise','sTr','sTgt','sBi','sApiKey','sGloss','sOut',
+                  'sProvider','sApiBase','sLlmModel',
+                  'sBurn','sMux','sChars','sDur','sCompute','sDevice','sPrompt',
+                  'sSimplify','sFixups',
+                  'sDesub','sDesubRegion','sDesubMethod','sDesubOnly'];
+
+function collectSettings() {
+  const o = {
+    model: $('#sModel').value,
+    language: $('#sLang').value,
+    denoise: $('#sDenoise').checked,
+    // 识别纠错
+    simplify: $('#sSimplify').checked,
+    // 去原字幕
+    desub: $('#sDesub').checked,
+    desub_pos: ($$('#segDesubPos button.on')[0] || {dataset:{v:'auto'}}).dataset.v,
+    desub_region: $('#sDesubRegion').value.trim(),
+    desub_method: $('#sDesubMethod').value,
+    desub_only: $('#sDesubOnly').checked,
+    fixups: $('#sFixups').value.trim(),
+    translate: $('#sTr').checked ? $('#sTgt').value : '',
+    bilingual: $('#sBi').checked,
+    api_key: $('#sApiKey').value.trim(),
+    provider: $('#sProvider') ? $('#sProvider').value : '',
+    api_base: $('#sApiBase') ? $('#sApiBase').value.trim() : '',
+    llm_model: $('#sLlmModel') ? $('#sLlmModel').value.trim() : '',
+    glossary: $('#sGloss').value.trim(),
+    output: $('#sOut').value.trim(),
+    burn: $('#sBurn').checked,
+    mux: $('#sMux').checked,
+    max_chars: +$('#sChars').value || 21,
+    max_duration: +$('#sDur').value || 7,
+    compute_type: $('#sCompute').value,
+    device: $('#sDevice').value,
+    prompt: $('#sPrompt').value.trim(),
+    backend: ($$('#segBackend button.on')[0] || {dataset:{v:'auto'}}).dataset.v,
+    formats: $$('#chipsFmt .chip.on').map(c => c.dataset.v),
+  };
+  if (!o.formats.length) o.formats = ['srt'];
+  return o;
+}
+
+let saveTimer = null;
+function saveSettings() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    const s = collectSettings();
+    S.settings = s;
+    window.pywebview.api.save_settings(s).catch(()=>{});
+  }, 350);
+}
+
+function applySettings(s) {
+  if (!s) return;
+  const set = (id, v) => { const el = $('#'+id); if (el != null && v != null) el.value = v; };
+  const chk = (id, v) => { const el = $('#'+id); if (el) el.checked = !!v; };
+
+  set('sModel', s.model); set('sLang', s.language);
+  chk('sDenoise', s.denoise);
+  chk('sTr', !!s.translate);
+  set('sTgt', s.translate || 'en');
+  chk('sBi', s.bilingual);
+  set('sApiKey', s.api_key); set('sGloss', s.glossary); set('sOut', s.output);
+  // 大模型配置：服务商下拉要先填充才能设值，所以放到 loadProviders 之后
+  window.__pendingLlm = { provider: s.provider, base: s.api_base, model: s.llm_model };
+  chk('sBurn', s.burn); chk('sMux', s.mux);
+  set('sChars', s.max_chars); set('sDur', s.max_duration);
+  set('sCompute', s.compute_type); set('sDevice', s.device); set('sPrompt', s.prompt);
+  // 识别纠错：simplify 默认开启，旧配置里没有该字段时不覆盖默认值
+  if (s.simplify !== undefined) chk('sSimplify', s.simplify);
+  set('sFixups', s.fixups);
+  // 去字幕
+  chk('sDesub', s.desub);
+  set('sDesubRegion', s.desub_region);
+  set('sDesubMethod', s.desub_method || 'blur');
+  chk('sDesubOnly', s.desub_only);
+  if (s.desub_pos){
+    $$('#segDesubPos button').forEach(b => b.classList.toggle('on', b.dataset.v === s.desub_pos));
+  }
+  syncDesubRows();
+
+  if (s.formats && s.formats.length) {
+    $$('#chipsFmt .chip').forEach(c => c.classList.toggle('on', s.formats.includes(c.dataset.v)));
+  }
+  if (s.backend) {
+    $$('#segBackend button').forEach(b => b.classList.toggle('on', b.dataset.v === s.backend));
+  }
+  syncVisibility();
+}
+
+function syncDesubRows(){
+  const on = $('#sDesub') && $('#sDesub').checked;
+  ['rowDesubOpt','rowDesubMethod','rowDesubOnly'].forEach(id => {
+    const el = $('#' + id); if (el) el.style.display = on ? '' : 'none';
+  });
+  const pos = ($$('#segDesubPos button.on')[0] || {dataset:{v:'auto'}}).dataset.v;
+  const m = $('#rowDesubManual');
+  if (m) m.style.display = (on && pos === 'manual') ? '' : 'none';
+}
+
+function syncVisibility() {
+  const tr = $('#sTr').checked;
+  $('#rowTgt').style.display = tr ? '' : 'none';
+  $('#rowBi').style.display  = tr ? '' : 'none';
+  $('#rowBe').style.display  = tr ? '' : 'none';
+  const be = ($$('#segBackend button.on')[0]||{dataset:{v:'auto'}}).dataset.v;
+  // auto 模式下也需要 Key（有 Key 才会走大模型），所以两种模式都放开配置
+  const showLlm = tr && be !== 'offline';
+  ['rowApi','rowApiKey','rowApiModel','rowApiBase','rowApiTest','rowApiEnv']
+    .forEach(id => { const el = $('#'+id); if (el) el.style.display = showLlm ? '' : 'none'; });
+  syncProviderFields();
+}
+
+// 选中服务商后，自动填端点与推荐模型；自定义则放开手填
+// 填充服务商下拉。必须在 applySettings 之前做，
+// 否则给 <select> 设值会因为选项还不存在而失败。
+async function loadProviders() {
+  try {
+    const r = await window.pywebview.api.list_llm_providers();
+    if (!r || !r.ok) return;
+    LLM_PROVIDERS = r.providers || [];
+    const sel = $('#sProvider');
+    if (!sel) return;
+    sel.innerHTML = LLM_PROVIDERS.map(p =>
+      `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+
+    const pend = window.__pendingLlm || {};
+    // 上次选的服务商优先；否则用后端探测到的（可能来自环境变量）
+    const want = pend.provider || (r.current && r.current.provider) || 'deepseek';
+    if (want) sel.value = want;
+    if (pend.base) $('#sApiBase').value = pend.base;
+    if (pend.model) $('#sLlmModel').value = pend.model;
+
+    // 环境变量里已经配了 Key：提示用户，省得他以为没生效
+    const envNote = $('#envNote');
+    if (envNote) {
+      if (r.current && r.current.has_key && !($('#sApiKey').value || '').trim()) {
+        envNote.innerHTML = `检测到 <span class="k">${escapeHtml(r.current.key_source)}</span> 已配置 Key，可直接用`;
+      } else {
+        envNote.textContent = '';
+      }
+    }
+    syncProviderFields();
+  } catch (e) { /* 允许失败，不影响其他功能 */ }
+}
+
+function syncProviderFields() {
+  const sel = $('#sProvider');
+  if (!sel || !sel.value) return;
+  const p = (LLM_PROVIDERS || []).find(x => x.id === sel.value);
+  if (!p) return;
+  const note = $('#providerNote');
+  if (note) note.textContent = p.note || '';
+  const gk = $('#btnGetKey');
+  if (gk) {
+    gk.style.display = (p.key_url && p.id !== 'ollama') ? '' : 'none';
+    gk.dataset.url = p.key_url || '';
+  }
+  const baseEl = $('#sApiBase'), modelEl = $('#sLlmModel');
+  if (!p.base) {
+    // 自定义：清空让用户填，并给个提示
+    if (baseEl) baseEl.placeholder = 'https://your-endpoint/v1';
+    if (modelEl) modelEl.placeholder = '模型名，例如 gpt-4o-mini';
+    return;
+  }
+  // 只有当前值与所有预设都不匹配时才覆盖，避免冲掉用户手改的内容
+  const matched = (LLM_PROVIDERS || []).some(x => x.base && x.base === (baseEl && baseEl.value));
+  if (baseEl && (!baseEl.value || matched)) baseEl.value = p.base;
+  if (modelEl && (!modelEl.value || matched)) modelEl.value = p.model;
+  // 本地服务不需要 Key
+  const isLocal = /127\.0\.0\.1|localhost/.test(p.base);
+  const keyRow = $('#rowApiKey');
+  if (keyRow) keyRow.style.opacity = isLocal ? '.55' : '1';
+  if (keyRow) keyRow.title = isLocal ? '本地服务通常不需要 Key' : '';
+}
+
+async function testLlm() {
+  const btn = $('#btnTestLlm'), st = $('#llmStatus');
+  btn.disabled = true;
+  st.className = 'llm-status';
+  st.textContent = '测试中…';
+  try {
+    const r = await window.pywebview.api.test_llm(
+      $('#sApiKey').value.trim(), $('#sApiBase').value.trim(), $('#sLlmModel').value.trim());
+    if (r && r.ok) {
+      st.className = 'llm-status ok';
+      st.innerHTML = `连接正常 · ${r.elapsed}s · 模型 <span class="k">${escapeHtml(r.used_model||r.model)}</span>`;
+      logLine(`大模型连通：${r.base} / ${r.used_model || r.model}`, 'ok');
+      saveSettings();
+    } else {
+      st.className = 'llm-status err';
+      st.innerHTML = escapeHtml((r && (r.error || '失败')) + (r && r.hint ? '（' + r.hint + '）' : ''));
+      logLine('大模型连接失败：' + ((r && r.error) || ''), 'err');
+    }
+  } catch (e) {
+    st.className = 'llm-status err';
+    st.textContent = '测试失败：' + e;
+  }
+  btn.disabled = false;
+}
+
+function initSettings() {
+  SET_KEYS.forEach(id => {
+    const el = $('#'+id);
+    if (!el) return;
+    el.addEventListener('change', () => { syncVisibility(); saveSettings(); });
+    if (el.tagName === 'INPUT' && el.type === 'text') {
+      el.addEventListener('input', saveSettings);
+    }
+  });
+  $$('#segBackend button').forEach(b => {
+    b.onclick = () => {
+      $$('#segBackend button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      syncVisibility(); saveSettings();
+    };
+  });
+  $$('#chipsFmt .chip').forEach(c => {
+    c.onclick = () => {
+      c.classList.toggle('on');
+      if (!$$('#chipsFmt .chip.on').length) c.classList.add('on');
+      saveSettings();
+    };
+  });
+  // 去字幕：开关与分段选择
+  if ($('#sDesub')) {
+    $('#sDesub').addEventListener('change', () => { syncDesubRows(); saveSettings(); });
+    $$('#segDesubPos button').forEach(b => {
+      b.onclick = () => {
+        $$('#segDesubPos button').forEach(x => x.classList.remove('on'));
+        b.classList.add('on');
+        syncDesubRows(); saveSettings();
+      };
+    });
+    // ---- 大模型配置交互 ----
+    const prov = $('#sProvider');
+    if (prov) prov.addEventListener('change', () => { syncProviderFields(); saveSettings(); });
+    const ab = $('#sApiBase'), lm = $('#sLlmModel');
+    if (ab) ab.addEventListener('input', saveSettings);
+    if (lm) lm.addEventListener('input', saveSettings);
+    const tk = $('#btnToggleKey');
+    if (tk) tk.onclick = () => {
+      const el = $('#sApiKey');
+      el.type = el.type === 'password' ? 'text' : 'password';
+      tk.textContent = el.type === 'password' ? '👁' : '🙈';
+    };
+    const gk = $('#btnGetKey');
+    if (gk) gk.onclick = () => {
+      const u = gk.dataset.url;
+      if (u) window.pywebview.api.open_url(u);
+    };
+    const tl = $('#btnTestLlm');
+    if (tl) tl.onclick = testLlm;
+
+    const dm = $('#sDesubMethod');
+    if (dm) dm.addEventListener('change', saveSettings);
+    const dr = $('#sDesubRegion');
+    if (dr) dr.addEventListener('input', saveSettings);
+    const dOnly = $('#sDesubOnly');
+    if (dOnly) dOnly.addEventListener('change', saveSettings);
+    // 手动检测：调后端分析并填入
+    const bd = $('#btnDetectRegion');
+    if (bd) {
+      bd.onclick = async () => {
+        const f = S.queue.find(x => x.status !== 'done') || S.queue[0];
+        if (!f) { toast('请先添加视频', 'err'); return; }
+        bd.disabled = true; bd.textContent = '检测中…';
+        try {
+          const r = await window.pywebview.api.detect_subtitle(f.path);
+          if (r && r.ok && r.region) {
+            const g = r.region;
+            $('#sDesubRegion').value = `${g.x},${g.y},${g.w},${g.h}`;
+            const pct = ((g.y / (r.height || 1280)) * 100).toFixed(1);
+            toast(`检测到字幕区 y=${g.y}（画面 ${pct}% 处，置信度 ${r.confidence}）`, 'ok');
+            if (r.confidence < 0.6) {
+              logLine('提示：检测置信度偏低，请在预览中确认位置是否准确', 'warn');
+            }
+            saveSettings();
+          } else {
+            toast('未检测到字幕：' + ((r && r.reason) || '未知'), 'err');
+          }
+        } catch (e) { toast('检测失败：' + e, 'err'); }
+        bd.disabled = false; bd.textContent = '检测';
+      };
+    }
+    syncDesubRows();
+  }
+
+  $('#btnPickOut').onclick = async () => {
+    const r = await window.pywebview.api.pick_folder();
+    if (r) { $('#sOut').value = r; saveSettings(); }
+  };
+  $('#btnResetSet').onclick = () => {
+    applySettings({
+      model:'turbo', language:'zh', denoise:false, translate:'en', bilingual:false,
+      api_key:'', glossary:'', output:'', burn:false, mux:false,
+      max_chars:21, max_duration:7, compute_type:'auto', device:'auto', prompt:'',
+      backend:'auto', formats:['srt'],
+    });
+    saveSettings();
+    toast('已恢复默认设置', 'ok');
+  };
+}
+
+// ---------- 运行 ----------
+async function run() {
+  const todo = S.queue.filter(f => f.status !== 'done');
+  if (!todo.length) return;
+  if (!S.queue.length) { toast('请先添加文件', 'err'); return; }
+
+  const st = collectSettings();
+  if (!st.formats.length) st.formats = ['srt'];
+
+  S.running = true;
+  S.outputs = [];
+  S.preview = [];
+  todo.forEach(f => { f.status = 'idle'; f.progress = null; f.msg = ''; f.errorMsg = ''; });
+  renderQueue();
+
+  $('#btnRun').disabled = true;
+  $('#btnCancel').style.display = '';
+  $('#btnOpenOut').style.display = 'none';
+  $('#btnPreview').style.display = 'none';
+  $('#bar').className = 'bar';
+  $('#barI').style.width = '0%';
+  $('#stText').textContent = '准备中…';
+  $('#stTime').textContent = '';
+
+  // 日志：把本次任务的配置压成**一条**摘要，出问题时好回溯。
+  // 早期是拆成 6 条"文件数 X / 模型 Y / 格式 Z / 输出 W…"逐行打的，
+  // 信息量不大却很占版面，把真正的结果挤没了。
+  const cfgBits = [
+    `${todo.length} 个文件`,
+    st.model,
+    st.language ? st.language : '自动识别语言',
+    (st.formats || ['srt']).join('/'),
+  ];
+  if (st.translate) {
+    cfgBits.push(`译成${st.translate}（${st.backend === 'llm' ? '大模型' : '离线'}${st.bilingual ? '·双语' : ''}）`);
+  }
+  if (st.burn) cfgBits.push('烧录');
+  if (st.mux) cfgBits.push('多轨封装');
+  if (st.desub) cfgBits.push('去原字幕');
+  logLine('开始处理：' + cfgBits.join(' · '), 'stage');
+  logLine('输出到 ' + (st.output ? shortPath(st.output) : '与视频同目录'),
+          'info', st.output || '');
+
+  try {
+    const r = await window.pywebview.api.start_job({
+      paths: todo.map(f => f.path),
+      options: st,
+    });
+    if (!r || !r.ok) {
+      const err = (r && r.error) || '未知错误';
+      logLine('启动失败：' + err, 'err');
+      toast('启动失败：' + err, 'err');
+      resetRunUI();
+    }
+  } catch (e) {
+    logLine('启动异常：' + e, 'err');
+    toast('启动失败：' + e, 'err');
+    resetRunUI();
+  }
+}
+
+function resetRunUI() {
+  S.running = false;
+  $('#btnCancel').style.display = 'none';
+  $('#stText').textContent = '准备就绪';
+  $('#stTime').textContent = '';
+  $('#bar').className = 'bar idle';
+  $('#barI').style.width = '0%';
+  renderQueue();
+}
+
+async function cancelJob() {
+  $('#btnCancel').disabled = true;
+  $('#stText').textContent = '正在停止…';
+  try { await window.pywebview.api.cancel_job(); } catch(e) {}
+  setTimeout(() => { $('#btnCancel').disabled = false; }, 1200);
+}
+
+// ---------- 事件轮询 ----------
+// 为什么不由 Python 主动推：后台处理线程不能碰 UI 线程（详见 gui.py 里 _emit 的注释）。
+// 所以改成前端定时向 Python 拉事件队列，再由前端执行。
+// 这样所有 UI 操作都发生在 UI 线程上，跨线程问题彻底消失。
+let pollTimer = null;
+
+function startPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(pollOnce, 150);
+}
+
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+async function pollOnce() {
+  if (!window.pywebview || !window.pywebview.api) return;
+  try {
+    const evts = await window.pywebview.api.poll_events();
+    if (!evts || !evts.length) return;
+    for (const e of evts) {
+      try {
+        // e.js 形如 "window.onProgress && window.onProgress({...})"
+        (new Function(e.js))();
+      } catch (err) {
+        console.error('事件执行失败', err, e.js);
+      }
+    }
+  } catch (e) {
+    // 轮询失败不打断界面，下一轮继续
+  }
+}
+
+// ---------- 模型下载进度 ----------
+// 大模型首次使用要下 1.5~2.9 GB，十几分钟。必须让用户看见进度条在走，
+// 否则只会以为程序卡死了 —— 这是踩过的坑。
+let downloadState = null;
+
+window.onDownloadStart = function (d) {
+  downloadState = { pct: 0, started: Date.now() };
+  logLine(`开始下载模型（${(d && d.hint) || '较大'}），已走国内镜像，请耐心等待…`, 'warn');
+  $('#bar').className = 'bar';
+  $('#barI').style.width = '0%';
+  $('#stText').textContent = '正在下载识别模型…';
+  $('#stTime').textContent = '准备中';
+};
+
+window.onDownloadProgress = function (d) {
+  if (!d) return;
+  const pct = d.pct || 0;
+  if (downloadState) downloadState.pct = pct;
+
+  const gotMB = (d.got / 1024 / 1024).toFixed(0);
+  const totMB = (d.total / 1024 / 1024).toFixed(0);
+
+  // 下载阶段的进度条：真实百分比
+  $('#barI').style.width = pct + '%';
+
+  // 速度与剩余时间估算
+  let extra = `${gotMB}/${totMB} MB`;
+  if (downloadState && downloadState.started) {
+    const secs = (Date.now() - downloadState.started) / 1000;
+    if (secs > 3 && d.got > 0) {
+      const speed = d.got / secs;                       // B/s
+      const remain = speed > 0 ? (d.total - d.got) / speed : 0;
+      extra += ` · ${(speed / 1024 / 1024).toFixed(1)} MB/s`;
+      if (remain > 1 && remain < 7200) extra += ` · 剩余约 ${fmtClock(remain)}`;
+    }
+  }
+  $('#stText').textContent = `正在下载识别模型 ${pct.toFixed(1)}%`;
+  $('#stTime').textContent = extra;
+
+  // 每 10% 记一条日志，避免刷屏
+  const bucket = Math.floor(pct / 10);
+  if (downloadState && downloadState.lastBucket !== bucket) {
+    downloadState.lastBucket = bucket;
+    if (bucket > 0 && bucket <= 10) {
+      logLine(`  模型下载 ${bucket * 10}%（${extra}）`, 'info');
+    }
+  }
+};
+
+window.onDownloadEnd = function () {
+  downloadState = null;
+  logLine('模型下载完成，开始处理视频…', 'ok');
+  $('#stText').textContent = '模型就绪';
+  $('#stTime').textContent = '';
+};
+
+// ---------- Python 回调（由前端轮询后调用） ----------
+window.onProgress = function (p) {
+  const idx = p.file_index, cnt = p.file_count;
+
+  // ★ 这里**故意不写日志**。
+  // 早期版本会在每次阶段切换时记一条"抽取音轨…/识别中…/导出字幕文件…"，
+  // 结果日志被这些"复读状态栏"的话刷屏（实测刷到 732 条），
+  // 真正有用的产出路径和警告全被埋掉了。
+  // 阶段进展由状态栏和进度条呈现；日志只记**结果与异常**。
+
+  // 卡顿提示：某阶段超过 25 秒没有细粒度进度时，在状态栏明确告知"仍在处理"
+  const se = p.stage_elapsed || 0;
+  let label = p.stage_label || '处理中';
+  if (se >= 25 && (p.stage === 'load' || p.stage === 'translate' || p.stage === 'asr')) {
+    label += `（仍在处理，本阶段已用 ${fmtClock(se)}）`;
+  }
+
+  if (cnt > 1) {
+    $('#stText').innerHTML = `${escapeHtml(label)} · <b>${idx}/${cnt}</b>`
+      + (p.file_name ? ' · ' + escapeHtml(p.file_name) : '');
+  } else {
+    $('#stText').textContent = label;
+  }
+
+  // 时间显示：已用 + 预估剩余（有速度数据时才算）
+  // 剩余 = (当前文件剩余音频秒数 + 后续文件总时长) / 实时倍率
+  let timeTxt = '已用 ' + fmtClock(p.elapsed || 0);
+  if (p.speed > 0.05 && p.total > 0) {
+    const remainCur = Math.max(0, p.total - p.current) / p.speed;
+    let remainOthers = 0;
+    if (cnt > 1) {
+      // 队列里排在当前文件之后的、还没处理的文件时长之和
+      const idx0 = S.queue.findIndex(x => x.name === p.file_name);
+      if (idx0 >= 0) {
+        remainOthers = S.queue.slice(idx0 + 1)
+          .filter(x => x.status !== 'done' && x.status !== 'fail')
+          .reduce((a, x) => a + (x.duration || 0), 0) / p.speed;
+      }
+    }
+    const remain = remainCur + remainOthers;
+    if (remain > 1) timeTxt += ' · 预计剩余 ' + fmtClock(remain);
+  } else if (p.stage === 'load') {
+    timeTxt += ' · 正在加载模型';
+  }
+  $('#stTime').textContent = timeTxt;
+
+  // 整体进度 = (已完成文件 + 当前文件进度) / 总数
+  const fileRatio = p.total > 0 ? Math.min(1, p.current / p.total) : 0;
+  const overall = cnt > 0 ? ((idx - 1) + fileRatio) / cnt : fileRatio;
+  // 进度条只在真有进度时才推进；无细粒度进度的阶段用条纹动画表示"在跑"
+  if (fileRatio > 0 || p.stage === 'export') {
+    $('#barI').style.width = Math.round(overall * 100) + '%';
+    $('#bar').classList.remove('busy');
+  } else {
+    $('#bar').classList.add('busy');
+  }
+
+  if (p.file_name) {
+    const f = S.queue.find(x => x.name === p.file_name || p.file_name.endsWith(x.name));
+    if (f) {
+      f.status = 'run';
+      f.msg = p.stage_label || '处理中';
+      f.progress = fileRatio;
+      // 只更新该行，避免整表重排导致闪烁
+      const row = document.querySelector(`#qList .qrow[data-id="${f.id}"]`);
+      if (row) {
+        if (!row.classList.contains('done')) row.classList.remove('fail');
+        const sub = row.querySelector('.q-sub');
+        if (sub) sub.innerHTML = `<span class="q-tag run">${escapeHtml(p.stage_label||'处理中')}</span>`
+          + (f.duration?`<span class="sep">·</span>${fmtDur(f.duration)}`:'');
+        let pr = row.querySelector('.q-prog');
+        if (!pr) { pr = document.createElement('div'); pr.className='q-prog';
+                   pr.innerHTML='<i></i>'; row.querySelector('.q-main').appendChild(pr); }
+        pr.querySelector('i').style.width = Math.round(fileRatio*100)+'%';
+      }
+    }
+  }
+};
+
+window.onFileStart = function (d) {
+  // 短名 + 时长/体积压在一行；完整文件名与路径放 title
+  const bits = [];
+  if (d.duration) bits.push(fmtDur(d.duration));
+  if (d.size) bits.push(fmtSize(d.size));
+  logLine(`▶ ${shortName(d.name)}` + (bits.length ? `　${bits.join(' · ')}` : ''),
+          'file', d.path || d.name);
+};
+
+window.onFileDone = function (d) {
+  const f = S.queue.find(x => x.name === d.name) || S.queue.find(x => d.path && x.path === d.path);
+  if (f) {
+    f.status = d.ok ? 'done' : 'fail';
+    f.progress = d.ok ? 1 : null;
+    f.msg = d.ok ? '已完成' : '失败';
+    f.errorMsg = d.ok ? '' : (d.error || '未知错误');
+  }
+  if (d.outputs && d.outputs.length) S.outputs.push(...d.outputs);
+  if (d.preview && d.preview.length && !S.preview.length) S.preview = d.preview;
+
+  // 日志：结果 + 产出文件。
+  // 这是日志里最该看清的部分，所以压成**一行**（短名 + 条数 + 耗时 + 倍率 +
+  // 输出目录），而不是拆成好几行 —— 日志面板窄，行数一多就要滚动才看得见。
+  // 完整路径可以通过行内 title 悬浮查看。
+  const outDir = (d.outputs && d.outputs.length)
+    ? shortPath(d.outputs[0]) : '';
+  if (d.ok) {
+    const bits = [];
+    if (d.cues) bits.push(`${d.cues} 条`);
+    if (d.elapsed) {
+      const sec = (typeof d.elapsed.toFixed === 'function') ? d.elapsed.toFixed(1) : d.elapsed;
+      bits.push(`${sec}s`);
+    }
+    if (d.speed) bits.push(`${d.speed}x`);
+    logLine(`✓ ${shortName(d.name)}　${bits.join(' · ')}`
+            + (outDir ? `　→ ${outDir}` : ''), 'ok',
+            (d.outputs || []).join('\n'));
+  } else {
+    logLine(`✗ ${shortName(d.name)}　${d.error || '未知错误'}`, 'err', d.error || '');
+  }
+
+  const row = f && document.querySelector(`#qList .qrow[data-id="${f.id}"]`);
+  if (row) {
+    row.classList.toggle('done', !!d.ok);
+    row.classList.toggle('fail', !d.ok);
+    row.classList.remove('dragging','over');
+    const sub = row.querySelector('.q-sub');
+    if (sub) {
+      sub.innerHTML = d.ok
+        ? `<span class="q-tag ok">✓ 已完成</span>${f.duration?`<span class="sep">·</span>${fmtDur(f.duration)}`:''}`
+        : `<span class="q-tag bad">✗ 失败</span><span class="sep">·</span>${escapeHtml(d.error||'')}`;
+    }
+    const pr = row.querySelector('.q-prog');
+    if (pr) pr.remove();
+    const ico = row.querySelector('.q-ico');
+    if (ico) ico.parentElement.classList.toggle('done', !!d.ok);
+  } else {
+    renderQueue();
+  }
+  $('#qCnt').textContent = S.queue.length + ' 个文件';
+};
+
+window.onJobDone = function (r) {
+  S.running = false;
+  $('#btnCancel').style.display = 'none';
+  $('#btnRun').disabled = false;
+
+  const ok = r.ok_count||0, fail = r.fail_count||0;
+  logLine('──────────── 任务结束 ────────────', 'stage');
+  if (r.cancelled) logLine('已取消', 'warn');
+
+  if (fail === 0 && !r.cancelled) {
+    $('#bar').className = 'bar done';
+    $('#barI').style.width = '100%';
+    $('#stText').innerHTML = `全部完成 · <b>${ok}</b> 个文件`;
+    toast(`字幕生成完成，共 ${ok} 个文件`, 'ok');
+    logLine(`全部完成：成功 ${ok} 个`, 'ok');
+  } else {
+    $('#bar').className = 'bar err';
+    $('#stText').innerHTML = `完成 <b>${ok}</b> 个 · 失败 <b style="color:var(--err)">${fail}</b> 个`;
+    toast(`有 ${fail} 个文件失败，详见日志`, 'err');
+    logLine(`结果：成功 ${ok} 个，失败 ${fail} 个`, 'warn');
+  }
+  $('#stTime').textContent = '总用时 ' + fmtClock(r.elapsed||0);
+  logLine(`总用时 ${fmtClock(r.elapsed||0)}`, 'stage');
+
+  if (S.outputs.length) {
+    $('#btnOpenOut').style.display = '';
+    if (r.has_preview) $('#btnPreview').style.display = '';
+  }
+  updateRunBtn();
+  renderQueue();
+};
+
+// Python 推来的普通日志
+// 级别判断要注意顺序：一句话可能同时含"成功"和"失败"（如"成功 1 个，失败 1 个"），
+// 这种汇总信息应该算警告而非错误，否则错误计数会虚高。
+window.onLog = function (msg) {
+  if (!msg) return;
+  const s = String(msg);
+  const both = /成功.*失败|失败.*成功/.test(s);
+  const lv = both ? 'warn'
+           : /失败|错误|异常|error|failed/i.test(s) ? 'err'
+           : /警告|跳过|注意|降级/i.test(s) ? 'warn'
+           : /完成|就绪|成功|已就绪/i.test(s) ? 'ok'
+           : 'info';
+  logLine(s, lv);
+};
+
+window.onFatal = function (msg) {
+  logLine('致命错误：' + msg, 'err');
+  toast('错误：' + msg, 'err');
+  resetRunUI();
+};
+
+// 拖放：由 Python 侧 WinForms 事件推来真实路径
+// （HTML5 拖放在 pywebview 里拿不到完整路径，只能靠这条通道）
+window.onDroppedPaths = function (paths) {
+  if (!paths || !paths.length) return;
+  addPaths(paths);
+};
+
+// ---------- 预览 ----------
+function showPreview(file) {
+  let rows = S.preview;
+  if (file && file.preview && file.preview.length) rows = file.preview;
+  if (!rows || !rows.length) { toast('暂无可预览的字幕内容', 'err'); return; }
+
+  $('#pvTitle').textContent = file && file.name ? '字幕预览 · ' + file.name : '字幕预览';
+  $('#pvBody').innerHTML = rows.map(c => `
+    <div class="cue">
+      <div class="cue-n">${c.index}</div>
+      <div class="cue-t">${fmtTs(c.start)} → ${fmtTs(c.end)}</div>
+      <div class="cue-x">
+        <div class="cue-src">${escapeHtml(c.text)}</div>
+        ${c.trans ? `<div class="cue-tr">${escapeHtml(c.trans)}</div>` : ''}
+      </div>
+    </div>`).join('');
+  $('#mask').classList.add('on');
+}
+
+function fmtTs(s) {
+  s = Math.max(0, s||0);
+  const h = Math.floor(s/3600), m = Math.floor(s%3600/60), sec = Math.floor(s%60);
+  const ms = Math.round((s - Math.floor(s))*1000);
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}.${String(ms).padStart(3,'0')}`;
+}
+
+function initPreview() {
+  $('#btnPvClose').onclick = () => $('#mask').classList.remove('on');
+  $('#btnPvOk').onclick    = () => $('#mask').classList.remove('on');
+  $('#mask').onclick = (e) => { if (e.target.id === 'mask') $('#mask').classList.remove('on'); };
+  $('#btnPreview').onclick = () => {
+    if (S.preview.length) showPreview(null);
+    else {
+      const done = S.queue.find(f => f.status === 'done' && f.preview && f.preview.length);
+      if (done) showPreview(done); else toast('暂无可预览的字幕', 'err');
+    }
+  };
+  $('#btnPvOpen').onclick = () => openOutput();
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') $('#mask').classList.remove('on');
+  });
+}
+
+// ---------- 打开目录 ----------
+async function openOutput() {
+  let target = '';
+  if (S.outputs.length) {
+    target = S.outputs[0];
+  } else if (S.queue.length) {
+    target = S.queue[0].path;
+  }
+  if (!target) { toast('还没有可打开的目录', 'err'); return; }
+  try {
+    const r = await window.pywebview.api.reveal(target);
+    if (!r || !r.ok) toast(r && r.error ? r.error : '打开失败', 'err');
+  } catch (e) { toast('打开失败：' + e, 'err'); }
+}
+
+// ---------- 校对工作台 ----------
+// 目的是"对着音轨逐句修正"，所以进入时要带上视频和刚生成的字幕。
+async function openReview() {
+  // 优先用已完成任务的文件；没有就用队列第一个
+  let video = '';
+  const doneFile = S.queue.find(f => f.status === 'done');
+  if (doneFile) video = doneFile.path;
+  else if (S.queue.length) video = S.queue[0].path;
+
+  if (!video) {
+    toast('请先添加一个视频，或在工作台里手动选择文件', 'err');
+  }
+  try {
+    const r = await window.pywebview.api.open_review(video, '');
+    if (r && r.ok) {
+      logLine('已打开字幕校对工作台', 'ok');
+      toast('校对工作台已打开（独立窗口）', 'ok');
+    } else {
+      toast('打开失败：' + ((r && r.error) || '未知错误'), 'err');
+    }
+  } catch (e) { toast('打开失败：' + e, 'err'); }
+}
+
+// ---------- 启动 ----------
+async function boot() {
+  initDrop();
+  initSettings();
+  initPreview();
+  initLog();
+  // 恢复上次的日志面板显隐
+  try {
+    if (localStorage.getItem('subgen_log_hidden') === '1') toggleLog(false);
+    else toggleLog(true);
+  } catch (e) { toggleLog(true); }
+  $('#btnRun').onclick = run;
+  $('#btnCancel').onclick = cancelJob;
+  $('#btnOpenOut').onclick = openOutput;
+  $('#btnReview').onclick = openReview;
+  $('#btnClear').onclick = async () => {
+    if (S.running) { toast('正在处理，无法清空', 'err'); return; }
+    if (!S.queue.length) return;
+    S.queue = [];
+    renderQueue();
+  };
+  renderQueue();
+
+  // 持续轮询事件队列（150ms 一次，开销可忽略）
+  // 常驻运行而不是只在任务期间，这样"准备模型"这类早期事件也不会丢
+  startPolling();
+
+  // 环境信息 + 恢复设置
+  try {
+    const env = await window.pywebview.api.get_env();
+    if (env) {
+      const gpu = env.gpu_name || (env.device === 'cuda' ? 'GPU' : 'CPU');
+      $('#envTxt').textContent = (env.device === 'cuda' ? 'GPU · ' : 'CPU · ') + gpu + ' · 就绪';
+      $('#envDot').className = 'dot ' + (env.device === 'cuda' ? 'gpu' : 'cpu');
+      if (env.ffmpeg === false) {
+        toast('未检测到 ffmpeg，无法处理视频', 'err');
+      }
+    }
+    // 先把服务商下拉填好，再恢复设置 ——
+    // 顺序反了的话给 <select> 设值会失败（选项还不存在）
+    await loadProviders();
+
+    const st = await window.pywebview.api.load_settings();
+    if (st && Object.keys(st).length) {
+      applySettings(st);
+      toast('已恢复上次设置', 'ok');
+    } else {
+      syncVisibility();
+    }
+  } catch (e) {
+    $('#envTxt').textContent = '就绪';
+    syncVisibility();
+  }
+}
+
+// pywebview 注入 api 的时机不确定，等它就绪
+if (window.pywebview && window.pywebview.api) {
+  boot();
+} else {
+  window.addEventListener('pywebviewready', boot);
+  // 兜底：某些版本不触发该事件
+  let tries = 0;
+  const t = setInterval(() => {
+    if (window.pywebview && window.pywebview.api) { clearInterval(t); boot(); }
+    else if (++tries > 60) { clearInterval(t); $('#envTxt').textContent = 'API 未就绪'; }
+  }, 100);
+}
+</script>
+</body>
+</html>
+

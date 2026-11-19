@@ -1,0 +1,65 @@
+# ============ 运行环境与模型（体积巨大） ============
+.venv/
+venv/
+env/
+models/
+*.ct2/
+*.bin
+*.npz
+
+# ============ 输出与临时文件 ============
+out/
+outputs/
+temp/
+tmp/
+*.tmp
+*.log
+crash.log
+gui_error.log
+
+# ============ 用户个人配置（★ 含 API Key，绝不能提交） ============
+.gui_settings.json
+*gui_settings*.json
+.env
+.env.*
+
+# ============ Python ============
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ============ 测试与覆盖率 ============
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ============ 编辑器与系统 ============
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============ 生成的示例产物（可重新生成） ============
+docs/tutorial/_preview_*.html
+out/_*.html
+bench_result.json
+
+# ============ 本地素材（可能是版权内容，不公开） ============
+xhs_subs/
+*.srt
+*.vtt
+*.ass
+*.lrc
+!docs/**/*.srt
